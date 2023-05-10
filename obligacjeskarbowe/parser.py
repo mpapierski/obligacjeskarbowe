@@ -23,7 +23,6 @@ def parse_balance(balance):
 
 
 def extract_balance(bs):
-    print("??")
     items = bs.select("span.formfield-base")
     assert len(items) == 1, f"Expected 1 item but found {len(items)}"
     span = items[0]
@@ -49,30 +48,31 @@ class Bond:
     zablokowanych: int
     nominalna: Money
     aktualna: Money
+    okres: int
+    oprocentowanie: Decimal
     data_wykupu: date
-    period: int
-    interest: Decimal
 
 
 def parse_tooltip(text):
     """This works well for ROD/RO"""
     if m := re.match(r"^okres (\d+) oprocentowanie (\d+\.\d+)%$", text):
-        (okres, interest) = m.groups()
-        return (int(okres), Decimal(interest))
+        (okres, oprocentowanie) = m.groups()
+        return (int(okres), Decimal(oprocentowanie))
     else:
         raise RuntimeError(f"Unable to parse tooltip {text}")
 
 
 def extract_bonds(bs):
-    tbody = bs.find_all("tbody", id="stanRachunku:j_idt140_data")
-    assert len(tbody) == 1
+    # tbody = bs.find_all("tbody", id="stanRachunku:j_idt140_data")
+    tbody = bs.select('tbody[id^="stanRachunku:j_idt"]')  # Match only beggining
+    # assert len(tbody) == 1, f'{len(tbody)}', list(map(lambda tb: tb.attrs['id'], bs.find_all('tbody')))
     tbody = tbody[0]
 
     bonds = []
 
     tooltips = {}
     for tooltip in re.findall(
-        r'forTarget: "(stanRachunku:j_idt140:\d+:nazwaSkrocona)", content: \{ text: (".+?") \}',
+        r'forTarget:\s*"(stanRachunku:j_idt\d+:\d+:nazwaSkrocona)",\s*content:\s*\{\s*text:\s*(".+?")\s*\}',
         str(bs),
     ):
         (for_target, content) = tooltip
@@ -91,18 +91,107 @@ def extract_bonds(bs):
         nominalna = parse_balance(tds[3].text.strip())
         aktualna = parse_balance(tds[4].text.strip())
         data_wykupu = date.fromisoformat(tds[5].text.strip())
-        (period, interest) = parse_tooltip(tooltip)
+        (okres, oprocentowanie) = parse_tooltip(tooltip)
         bonds.append(
             Bond(
-                emisja,
-                dostepnych,
-                zablokowanych,
-                nominalna,
-                aktualna,
-                data_wykupu,
-                period,
-                interest,
+                emisja=emisja,
+                dostepnych=dostepnych,
+                zablokowanych=zablokowanych,
+                nominalna=nominalna,
+                aktualna=aktualna,
+                data_wykupu=data_wykupu,
+                okres=okres,
+                oprocentowanie=oprocentowanie,
             )
         )
 
     return bonds
+
+
+@dataclass
+class AvailableBond:
+    rodzaj: str
+    emisja: str
+    okres_sprzedazy_od: date
+    okres_sprzedazy_do: date
+    oprocentowanie: Decimal
+    list_emisyjny: str
+    wybierz: str
+
+
+def parse_emisja(text):
+    return text.split(": ")
+
+
+def parse_okres_sprzedazy(text):
+    if m := re.match(r"od (\d{4}-\d{2}-\d{2})\s*do\s*(\d{4}-\d{2}-\d{2})", text):
+        (od, do) = m.groups()
+        return (date.fromisoformat(od), date.fromisoformat(do))
+    else:
+        raise RuntimeError(f"Expected valid period of time but received {text!r}")
+
+
+def parse_oprocentowanie(text):
+    if m := re.match(r"(\d+,\d+)%", text):
+        (oprocentowanie,) = m.groups()
+        oprocentowanie = oprocentowanie.replace(",", ".")
+        return Decimal(oprocentowanie)
+    else:
+        raise RuntimeError(f"Expected percentage but found {text!r}")
+
+
+def parse_wybierz_onclick(text):
+    if m := re.match(
+        r'PrimeFaces.ab\(\{s:"(dostepneEmisje:j_idt\d+:\d+:wybierz)",u:"(.+?)"\}\);return false;',
+        text,
+    ):
+        (source, render) = m.groups()
+        return {
+            "s": source,
+            "u": render,
+        }
+    else:
+        raise RuntimeError(f"Unexpected onclick code found {text!r}")
+
+
+def extract_available_bonds(bs):
+    tbody = bs.select('tbody[id^="dostepneEmisje:j_idt"]')  # Match only beggining
+
+    available = []
+    for row in tbody[0].find_all("tr"):
+        tds = row.find_all("td")
+        (rodzaj, emisja) = parse_emisja(tds[0].text)
+        (okres_sprzedazy_od, okres_sprzedazy_do) = parse_okres_sprzedazy(
+            tds[1].text.strip()
+        )
+        oprocentowanie = parse_oprocentowanie(tds[2].text)
+        if tds[3].text != "pokaż":
+            raise RuntimeError(f"Invalid link found {tds[3]})")
+        list_emisyjny = tds[3].find("a").attrs["href"]
+
+        wybierz = tds[4].find("a").attrs["onclick"]
+
+        url = bs.select('form[name="dostepneEmisje"]')[0].attrs["action"]
+
+        wybierz = parse_wybierz_onclick(wybierz)
+
+        # wybierz['url'] =
+
+        available.append(
+            AvailableBond(
+                rodzaj,
+                emisja,
+                okres_sprzedazy_od,
+                okres_sprzedazy_do,
+                oprocentowanie,
+                list_emisyjny,
+                wybierz,
+            )
+        )
+
+    return available
+
+
+def parse_redirect(html):
+    bs = BeautifulSoup(html, features="xml")
+    return bs.find("redirect").attrs["url"]

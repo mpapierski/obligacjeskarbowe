@@ -2,7 +2,15 @@ import datetime
 from decimal import Decimal
 
 from bs4 import BeautifulSoup
-from obligacjeskarbowe.parser import Bond, Money, extract_balance, extract_bonds
+from obligacjeskarbowe.parser import (
+    AvailableBond,
+    Bond,
+    Money,
+    extract_available_bonds,
+    extract_balance,
+    extract_bonds,
+    parse_redirect,
+)
 
 
 def test_extract_balance():
@@ -78,8 +86,8 @@ def test_extract_bonds():
             nominalna=Money(amount=Decimal("123000.00"), currency="PLN"),
             aktualna=Money(amount=Decimal("456111.22"), currency="PLN"),
             data_wykupu=datetime.date(2074, 10, 25),
-            period=1,
-            interest=Decimal("7.5"),
+            okres=1,
+            oprocentowanie=Decimal("7.5"),
         ),
         Bond(
             emisja="ASDF1234",
@@ -88,7 +96,42 @@ def test_extract_bonds():
             nominalna=Money(amount=Decimal("456789.99"), currency="PLN"),
             aktualna=Money(amount=Decimal("987654.60"), currency="PLN"),
             data_wykupu=datetime.date(3011, 1, 1),
-            period=1,
-            interest=Decimal("7.5"),
+            okres=1,
+            oprocentowanie=Decimal("7.5"),
         ),
     ]
+
+
+def test_available_bonds():
+    bs = BeautifulSoup(
+        open("zakupObligacji500Plus.html").read(), features="html.parser"
+    )
+    print(extract_available_bonds(bs))
+    assert extract_available_bonds(bs) == [
+        AvailableBond(
+            rodzaj="6-letnie",
+            emisja="ROS0529",
+            okres_sprzedazy_od=datetime.date(2023, 5, 1),
+            okres_sprzedazy_do=datetime.date(2023, 5, 31),
+            oprocentowanie=Decimal("7.20"),
+            list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROS0529",
+            wybierz={"s": "dostepneEmisje:j_idt138:0:wybierz", "u": "dostepneEmisje"},
+        ),
+        AvailableBond(
+            rodzaj="12-letnie",
+            emisja="ROD0535",
+            okres_sprzedazy_od=datetime.date(2023, 5, 1),
+            okres_sprzedazy_do=datetime.date(2023, 5, 31),
+            oprocentowanie=Decimal("7.50"),
+            list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROD0535",
+            wybierz={"s": "dostepneEmisje:j_idt138:1:wybierz", "u": "dostepneEmisje"},
+        ),
+    ]
+
+
+def test_parse_redirect():
+    url = parse_redirect(
+        r"""<?xml version='1.0' encoding='UTF-8'?>
+<partial-response id="j_id1"><redirect url="/zakupObligacji500Plus.html?execution=e2s2"></redirect></partial-response>"""
+    )
+    assert url == "/zakupObligacji500Plus.html?execution=e2s2"
