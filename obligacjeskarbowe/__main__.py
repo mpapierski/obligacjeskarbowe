@@ -1,5 +1,6 @@
 from collections import OrderedDict
 import dataclasses
+from decimal import Decimal
 import os
 import sys
 import click
@@ -103,10 +104,35 @@ def family_500plus(username, password):
             for bond in available_bonds
         ]
         click.echo(
-            tabulate(available_bonds, ["Rodzaj", "Emisja", "Od", "Do"], tablefmt="fancy_grid")
+            tabulate(
+                available_bonds, ["Rodzaj", "Emisja", "Od", "Do"], tablefmt="fancy_grid"
+            )
         )
     finally:
         client.logout()
+
+
+@cli.command()
+@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
+@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
+@click.option("--amount", required=True, type=Decimal)
+def require_balance(username, password, amount):
+    """Checks a balance to be exactly the expected amount. Exits if balance is invalid."""
+    client = ObligacjeSkarbowe(username, password)
+    client.login()
+    try:
+        if client.balance.amount != amount:
+            click.echo(
+                f"Your balance is expected to be {amount:02f} {DEFAULT_CURRENCY} but your balance is currently {client.balance.amount:02f} {client.balance.currency}.",
+                err=True,
+            )
+            sys.exit(1)
+    finally:
+        client.logout()
+
+
+if __name__ == "__main__":
+    cli()
 
 
 @cli.command()
@@ -120,13 +146,15 @@ def buy(username, password, symbol, amount):
     client.login()
     try:
         if client.balance.amount == 0:
-            click.echo('Your balance is zero. Unable to proceed.', err=True)
+            click.echo("Your balance is zero. Unable to proceed.", err=True)
             sys.exit(1)
 
         expanded_symbol = None
         for available_bond in client.list_500plus():
             if available_bond.emisja.startswith(symbol):
-                click.echo(f'Found a matching bond {available_bond.emisja} with an interest of {available_bond.oprocentowanie:02f}')
+                click.echo(
+                    f"Found a matching bond {available_bond.emisja} with an interest of {available_bond.oprocentowanie:02f}"
+                )
                 expanded_symbol = available_bond.emisja
                 break
 
