@@ -1,6 +1,8 @@
 from collections import OrderedDict
 import dataclasses
 import os
+import sys
+import click
 
 from tabulate import tabulate
 from obligacjeskarbowe.client import ObligacjeSkarbowe
@@ -53,34 +55,86 @@ def show_bonds(bonds):
         ]
     )
 
-    print(tabulate(rows, headers, tablefmt="fancy_grid"))
-    # print(tabulate()
+    click.echo(tabulate(rows, headers, tablefmt="fancy_grid"))
 
 
-def main():
-    username = os.environ["OBLIGACJESKARBOWE_USERNAME"]
-    password = os.environ["OBLIGACJESKARBOWE_PASSWORD"]
+@click.group()
+def cli():
+    pass
+
+
+@cli.command()
+@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
+@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
+def portfolio(username, password):
     client = ObligacjeSkarbowe(username, password)
     client.login()
 
     try:
-        print(
-            f"Saldo środków pieniężnych: {client.balance}",
+        click.echo(
+            f"Saldo środków pieniężnych: {client.balance.amount:02f} {client.balance.currency}",
         )
 
-        print("Obligacje:")
+        click.echo("Obligacje:")
         show_bonds(client.bonds)
 
+    finally:
+        client.logout()
+
+
+@cli.command()
+@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
+@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
+def family_500plus(username, password):
+    """List family bonds for the 500+ program."""
+    client = ObligacjeSkarbowe(username, password)
+    client.login()
+    try:
         available_bonds = client.list_500plus()
+        click.echo("Zakup - dostępne emisje obligacji 500+")
+        available_bonds = [
+            [
+                bond.rodzaj,
+                bond.emisja,
+                bond.okres_sprzedazy_od,
+                bond.okres_sprzedazy_do,
+                f"{bond.oprocentowanie:02f}%",
+            ]
+            for bond in available_bonds
+        ]
+        click.echo(
+            tabulate(available_bonds, ["Rodzaj", "Emisja", "Od", "Do"], tablefmt="fancy_grid")
+        )
+    finally:
+        client.logout()
 
-        for available_bond in available_bonds:
-            print(available_bond)
 
-        # client.purchase('ROD0535', amount=10)
+@cli.command()
+@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
+@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
+@click.option("--symbol", required=True)
+@click.option("--amount", required=True, type=int)
+def buy(username, password, symbol, amount):
+    """Performs automatic purchase of a most recent bond i.e. "ROD" buys current RODXY bond."""
+    client = ObligacjeSkarbowe(username, password)
+    client.login()
+    try:
+        if client.balance.amount == 0:
+            click.echo('Your balance is zero. Unable to proceed.', err=True)
+            sys.exit(1)
+
+        expanded_symbol = None
+        for available_bond in client.list_500plus():
+            if available_bond.emisja.startswith(symbol):
+                click.echo(f'Found a matching bond {available_bond.emisja} with an interest of {available_bond.oprocentowanie:02f}')
+                expanded_symbol = available_bond.emisja
+                break
+
+        client.purchase(expanded_symbol, amount)
 
     finally:
         client.logout()
 
 
 if __name__ == "__main__":
-    main()
+    cli()
