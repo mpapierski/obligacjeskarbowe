@@ -47,6 +47,7 @@ If you want to automatically purchase ROD bonds at 10th of each month...
   ```
 
    This will fail if you don't have at least `$AMOUNT` PLN available on your balance sheet. This should serve as a safety: if the bank transfer didn't arrive yet, you still have time to do the transfer.
+
 4. Set up another cron job that will run 10th each month that will purchase bonds from a specified series:
 
    ```sh
