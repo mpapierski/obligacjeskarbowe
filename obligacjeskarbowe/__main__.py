@@ -1,7 +1,7 @@
 from collections import OrderedDict
 import dataclasses
 from decimal import Decimal
-import os
+import logging
 import sys
 import click
 
@@ -14,7 +14,7 @@ def display_money(money):
     return f"{money.amount} {money.currency}"
 
 
-def show_bonds(bonds):
+def tabulate_bonds(bonds):
     rows = []
     for bond in bonds:
         d = dataclasses.asdict(bond, dict_factory=OrderedDict)
@@ -56,12 +56,30 @@ def show_bonds(bonds):
         ]
     )
 
-    click.echo(tabulate(rows, headers, tablefmt="fancy_grid"))
+    return tabulate(rows, headers, tablefmt="fancy_grid")
+
+
+def tabulate_available_bonds(available_bonds):
+    available_bonds = [
+        [
+            bond.rodzaj,
+            bond.emisja,
+            bond.okres_sprzedazy_od,
+            bond.okres_sprzedazy_do,
+            f"{bond.oprocentowanie:.02f}%",
+        ]
+        for bond in available_bonds
+    ]
+    return tabulate(
+        available_bonds,
+        ["Rodzaj", "Emisja", "Od", "Do", "Oprocentowanie"],
+        tablefmt="fancy_grid",
+    )
 
 
 @click.group()
 def cli():
-    pass
+    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 
 @cli.command()
@@ -73,11 +91,11 @@ def portfolio(username, password):
 
     try:
         click.echo(
-            f"Saldo środków pieniężnych: {client.balance.amount:02f} {client.balance.currency}",
+            f"Saldo środków pieniężnych: {client.balance.amount:.02f} {client.balance.currency}",
         )
 
         click.echo("Obligacje:")
-        show_bonds(client.bonds)
+        click.echo(tabulate_bonds(client.bonds))
 
     finally:
         client.logout()
@@ -93,21 +111,7 @@ def family_500plus(username, password):
     try:
         available_bonds = client.list_500plus()
         click.echo("Zakup - dostępne emisje obligacji 500+")
-        available_bonds = [
-            [
-                bond.rodzaj,
-                bond.emisja,
-                bond.okres_sprzedazy_od,
-                bond.okres_sprzedazy_do,
-                f"{bond.oprocentowanie:02f}%",
-            ]
-            for bond in available_bonds
-        ]
-        click.echo(
-            tabulate(
-                available_bonds, ["Rodzaj", "Emisja", "Od", "Do"], tablefmt="fancy_grid"
-            )
-        )
+        click.echo(tabulate_available_bonds(available_bonds))
     finally:
         client.logout()
 
@@ -123,16 +127,12 @@ def require_balance(username, password, amount):
     try:
         if client.balance.amount != amount:
             click.echo(
-                f"Your balance is expected to be {amount:02f} {DEFAULT_CURRENCY} but your balance is currently {client.balance.amount:02f} {client.balance.currency}.",
+                f"Your balance is expected to be {amount:.02f} {DEFAULT_CURRENCY} but your balance is currently {client.balance.amount:02f} {client.balance.currency}.",
                 err=True,
             )
             sys.exit(1)
     finally:
         client.logout()
-
-
-if __name__ == "__main__":
-    cli()
 
 
 @cli.command()
@@ -145,20 +145,27 @@ def buy(username, password, symbol, amount):
     client = ObligacjeSkarbowe(username, password)
     client.login()
     try:
-        if client.balance.amount == 0:
-            click.echo("Your balance is zero. Unable to proceed.", err=True)
-            sys.exit(1)
-
         expanded_symbol = None
-        for available_bond in client.list_500plus():
+
+        bonds_list = client.list_500plus()
+        for available_bond in bonds_list:
             if available_bond.emisja.startswith(symbol):
                 click.echo(
-                    f"Found a matching bond {available_bond.emisja} with an interest of {available_bond.oprocentowanie:02f}"
+                    f"Found a matching bond {available_bond.emisja} with an interest of {available_bond.oprocentowanie:.02f}"
                 )
                 expanded_symbol = available_bond.emisja
                 break
 
-        client.purchase(expanded_symbol, amount)
+        if expanded_symbol is None:
+            click.echo(f"Symbol {symbol} not found. Available bonds:", err=True)
+            click.echo(tabulate_available_bonds(bonds_list), err=True)
+            sys.exit(1)
+
+        try:
+            client.purchase(expanded_symbol, amount)
+        except Exception as error:
+            click.echo(f"Wystąpił błąd: {error}")
+            sys.exit(1)
 
     finally:
         client.logout()

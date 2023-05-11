@@ -1,9 +1,8 @@
 from dataclasses import dataclass
 import json
 import re
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
-import sys
 
 from bs4 import BeautifulSoup
 
@@ -120,11 +119,15 @@ class AvailableBond:
 
 
 def parse_emisja(text):
-    return text.split(": ")
+    try:
+        (rodzaj, emisja) = re.split(r":\s+", text)
+        return (rodzaj.strip(), emisja.strip())
+    except ValueError:
+        raise RuntimeError(f"Expected two tokens, received {text!r}")
 
 
 def parse_okres_sprzedazy(text):
-    if m := re.match(r"od (\d{4}-\d{2}-\d{2})\s*do\s*(\d{4}-\d{2}-\d{2})", text):
+    if m := re.match(r"od\s+(\d{4}-\d{2}-\d{2})\s*do\s+(\d{4}-\d{2}-\d{2})", text):
         (od, do) = m.groups()
         return (date.fromisoformat(od), date.fromisoformat(do))
     else:
@@ -169,29 +172,109 @@ def extract_available_bonds(bs):
             raise RuntimeError(f"Invalid link found {tds[3]})")
         list_emisyjny = tds[3].find("a").attrs["href"]
 
-        wybierz = tds[4].find("a").attrs["onclick"]
-
-        url = bs.select('form[name="dostepneEmisje"]')[0].attrs["action"]
-
-        wybierz = parse_wybierz_onclick(wybierz)
-
-        # wybierz['url'] =
+        wybierz_onclick = tds[4].find("a").attrs["onclick"]
+        wybierz = parse_wybierz_onclick(wybierz_onclick)
 
         available.append(
             AvailableBond(
-                rodzaj,
-                emisja,
-                okres_sprzedazy_od,
-                okres_sprzedazy_do,
-                oprocentowanie,
-                list_emisyjny,
-                wybierz,
+                rodzaj=rodzaj,
+                emisja=emisja,
+                okres_sprzedazy_od=okres_sprzedazy_od,
+                okres_sprzedazy_do=okres_sprzedazy_do,
+                oprocentowanie=oprocentowanie,
+                list_emisyjny=list_emisyjny,
+                wybierz=wybierz,
             )
         )
 
     return available
 
 
-def parse_redirect(html):
+def parse_xml_redirect(html):
     bs = BeautifulSoup(html, features="xml")
     return bs.find("redirect").attrs["url"]
+
+
+def extract_form_action_by_id(bs, form_id):
+    return bs.select(f'form[id="{form_id}"]')[0].attrs["action"]
+
+
+def extract_javax_view_state(bs):
+    return bs.select('input[name="javax.faces.ViewState"]')[0].attrs["value"]
+
+
+@dataclass
+class DaneDyspozycji:
+    kod_emisji: str
+    pelna_nazwa_emisji: str
+    oprocentowanie: Decimal
+    wartosc_nominalna: Money
+    maksymalnie: int
+    saldo_srodkow_pienieznych: Money
+    zgodnosc: bool  # "Czy transakcja jest zgodna z Grupą docelową?"
+
+
+def parse_szt(text):
+    if m := re.match(r"^(\d+) szt$", text):
+        (szt,) = m.groups()
+        return int(szt)
+    else:
+        raise RuntimeError(f"Unable to parse szt {text!r}")
+
+
+def parse_tak_nie(text):
+    if text == "TAK":
+        return True
+    elif text == "NIE":
+        return False
+    else:
+        raise RuntimeError(f"Expected TAK or NIE but received {text}")
+
+
+def extract_dane_dyspozycji_500(bs):
+    text = dict(extract_two_columns(bs))
+
+    pelna_nazwa_emisji_1 = text.pop("Pełna nazwa emisji").strip()
+    pelna_nazwa_emisji_2 = text.pop("").strip()
+    oprocentowanie = parse_oprocentowanie(text.pop("Oprocentowanie"))
+    wartosc_nominalna = parse_balance(text.pop("Wartość nominalna jednej obligacji"))
+    maksymalnie = parse_szt(text.pop("Maksymalnie"))
+    saldo_srodkow_pienieznych = parse_balance(text.pop("Saldo środków pieniężnych"))
+    zgodnosc = parse_tak_nie(text.pop("Czy transakcja jest zgodna z Grupą docelową?"))
+
+    return DaneDyspozycji(
+        kod_emisji=text.pop("Kod emisji"),
+        pelna_nazwa_emisji=f"{pelna_nazwa_emisji_1} {pelna_nazwa_emisji_2}",
+        oprocentowanie=oprocentowanie,
+        wartosc_nominalna=wartosc_nominalna,
+        maksymalnie=maksymalnie,
+        saldo_srodkow_pienieznych=saldo_srodkow_pienieznych,
+        zgodnosc=zgodnosc,
+    )
+
+
+def extract_two_columns(bs):
+    text = []
+
+    # Gather all the spans with descriptions from left and right column.
+    for span in bs.select(".formlabel-230.formlabel-base"):
+        left_column = span.text.strip()
+        right_column = span.find_next("span").text
+        right_column = " ".join(
+            map(lambda line: line.strip(), right_column.splitlines())
+        )
+
+        assert left_column not in dict(text)
+        text.append([left_column, right_column])
+
+    return text
+
+
+def extract_purchase_step_title(bs):
+    return bs.select("div#content > h3")[0].text
+
+
+def extract_data_przyjecia_zlecenia(bs):
+    text = dict(extract_two_columns(bs))
+    data_przyjecia = text["Data i czas przyjęcia zlecenia:"]
+    return datetime.fromisoformat(data_przyjecia)
