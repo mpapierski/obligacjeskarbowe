@@ -42,9 +42,9 @@ If you want to automatically purchase ROD bonds at 10th of each month...
 2. Set up an automated bank transfer earlier than intended automatic purchase date (i.e. 1st of Month). (`$AMOUNT`)
 3. Set up a cron job that will run around 5th to ensure that a balance is available in your account.
 
-  ```sh
-  python obligacjeskarbowe require-balance --amount `$AMOUNT`
-  ```
+   ```sh
+   python obligacjeskarbowe require-balance --amount $AMOUNT
+   ```
 
    This will fail if you don't have at least `$AMOUNT` PLN available on your balance sheet. This should serve as a safety: if the bank transfer didn't arrive yet, you still have time to do the transfer.
 
