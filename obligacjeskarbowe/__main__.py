@@ -138,6 +138,21 @@ def require_balance(username, password, amount):
 @cli.command()
 @click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
 @click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
+def list_bonds(username, password):
+    """List family bonds for the 500+ program."""
+    client = ObligacjeSkarbowe(username, password)
+    client.login()
+    try:
+        available_bonds = client.list_bonds()
+        click.echo("Zakup - dostępne emisje obligacji")
+        click.echo(tabulate_available_bonds(available_bonds))
+    finally:
+        client.logout()
+
+
+@cli.command()
+@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
+@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
 @click.option("--symbol", required=True)
 @click.option("--amount", required=True, type=int)
 def buy(username, password, symbol, amount):

@@ -56,9 +56,8 @@ class ObligacjeSkarbowe:
         self.session.cookies.set("obligacje_set", "none")
         log.info("Logged in")
 
-    def list_500plus(self):
-        """Lists available 500+ bonds"""
-        r = self.session.get(self.base_url + "/zakupObligacji500Plus.html")
+    def __bonds(self, path):
+        r = self.session.get(f"{self.base_url}/{path}")
         r.raise_for_status()
 
         bs = BeautifulSoup(r.content, features="html.parser")
@@ -71,9 +70,17 @@ class ObligacjeSkarbowe:
             [(bond.emisja, bond.wybierz) for bond in self.available_bonds]
         )
 
-        log.info(f"Found {len(self.available_bonds)} family bonds")
+        log.info(f"Found {len(self.available_bonds)} bonds at {path}")
 
         return self.available_bonds
+
+    def list_500plus(self):
+        """Lists available 500+ bonds"""
+        return self.__bonds("/zakupObligacji500Plus.html")
+
+    def list_bonds(self):
+        """Lists available bonds"""
+        return self.__bonds("/zakupObligacji.html")
 
     def purchase(self, emisja, amount):
         """Purchase a bond.
