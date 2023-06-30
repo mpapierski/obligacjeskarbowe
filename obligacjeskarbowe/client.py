@@ -1,5 +1,6 @@
 from collections import OrderedDict
 import logging
+import operator
 from bs4 import BeautifulSoup
 import requests
 
@@ -30,10 +31,9 @@ class ObligacjeSkarbowe:
 
         self.balance = None
         self.bonds = None
-        self.available_bonds = None
-        self.available_bonds_lookup = (
-            None  # A lookup table from readable bond name into the internal identifier.
-        )
+        self.available_bonds = []
+        # A lookup table from readable bond name into the internal identifier.
+        self.available_bonds_lookup = OrderedDict()
 
         self.next_url = None
         self.view_state = None
@@ -57,30 +57,37 @@ class ObligacjeSkarbowe:
         log.info("Logged in")
 
     def __bonds(self, path):
-        r = self.session.get(f"{self.base_url}/{path}")
+        r = self.session.get(f"{self.base_url}{path}")
         r.raise_for_status()
 
         bs = BeautifulSoup(r.content, features="html.parser")
-        self.available_bonds = extract_available_bonds(bs)
+
+        new_available_bonds = extract_available_bonds(bs)
+        self.available_bonds += new_available_bonds
 
         self.next_url = extract_form_action_by_id(bs, form_id="dostepneEmisje")
         self.view_state = extract_javax_view_state(bs)
 
-        self.available_bonds_lookup = OrderedDict(
+        new_bonds_lookup = OrderedDict(
             [(bond.emisja, bond.wybierz) for bond in self.available_bonds]
         )
+        self.available_bonds_lookup.update(new_bonds_lookup)
 
-        log.info(f"Found {len(self.available_bonds)} bonds at {path}")
+        log.info(f"Found {len(new_bonds_lookup)} bonds at {path}")
 
-        return self.available_bonds
-
-    def list_500plus(self):
-        """Lists available 500+ bonds"""
-        return self.__bonds("/zakupObligacji500Plus.html")
+        return new_available_bonds
 
     def list_bonds(self):
         """Lists available bonds"""
-        return self.__bonds("/zakupObligacji.html")
+        bonds = []
+        bonds += self.__bonds("/zakupObligacji500Plus.html")
+        bonds += self.__bonds("/zakupObligacji.html")
+        bonds.sort(
+            key=operator.attrgetter(
+                "dlugosc", "okres_sprzedazy_od", "oprocentowanie", "emisja"
+            )
+        )
+        return bonds
 
     def purchase(self, emisja, amount):
         """Purchase a bond.

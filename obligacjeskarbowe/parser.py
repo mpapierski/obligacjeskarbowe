@@ -116,6 +116,7 @@ class AvailableBond:
     oprocentowanie: Decimal
     list_emisyjny: str
     wybierz: str
+    dlugosc: int
 
 
 def parse_emisja(text):
@@ -175,6 +176,7 @@ def extract_available_bonds(bs):
         wybierz_onclick = tds[4].find("a").attrs["onclick"]
         wybierz = parse_wybierz_onclick(wybierz_onclick)
 
+        dlugosc = parse_duration(rodzaj)
         available.append(
             AvailableBond(
                 rodzaj=rodzaj,
@@ -184,6 +186,7 @@ def extract_available_bonds(bs):
                 oprocentowanie=oprocentowanie,
                 list_emisyjny=list_emisyjny,
                 wybierz=wybierz,
+                dlugosc=dlugosc,
             )
         )
 
@@ -278,3 +281,23 @@ def extract_data_przyjecia_zlecenia(bs):
     text = dict(extract_two_columns(bs))
     data_przyjecia = text["Data i czas przyjęcia zlecenia:"]
     return datetime.fromisoformat(data_przyjecia)
+
+
+DURATION_REGEXP = re.compile(r"(\d+)-(miesięczne|letni[ea])$")
+
+
+def parse_duration(input_text):
+    if m := DURATION_REGEXP.match(input_text):
+        (months, duration) = m.groups()
+        months = int(months)
+        if duration == "miesięczne":
+            multiplier = 1
+        elif duration.startswith("letni"):
+            multiplier = 12
+        else:
+            raise ValueError("Unable to recognize duration multiplier")
+        return months * multiplier
+    elif input_text == "roczne":
+        return 12
+    else:
+        raise ValueError("Unable to parse duration")

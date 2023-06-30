@@ -62,7 +62,7 @@ def tabulate_bonds(bonds):
 def tabulate_available_bonds(available_bonds):
     available_bonds = [
         [
-            bond.rodzaj,
+            f"{bond.dlugosc} ({bond.rodzaj})",
             bond.emisja,
             bond.okres_sprzedazy_od,
             bond.okres_sprzedazy_do,
@@ -72,7 +72,7 @@ def tabulate_available_bonds(available_bonds):
     ]
     return tabulate(
         available_bonds,
-        ["Rodzaj", "Emisja", "Od", "Do", "Oprocentowanie"],
+        ["Długość (mc)", "Emisja", "Od", "Do", "Oprocentowanie"],
         tablefmt="fancy_grid",
     )
 
@@ -104,21 +104,6 @@ def portfolio(username, password):
 @cli.command()
 @click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
 @click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
-def family_500plus(username, password):
-    """List family bonds for the 500+ program."""
-    client = ObligacjeSkarbowe(username, password)
-    client.login()
-    try:
-        available_bonds = client.list_500plus()
-        click.echo("Zakup - dostępne emisje obligacji 500+")
-        click.echo(tabulate_available_bonds(available_bonds))
-    finally:
-        client.logout()
-
-
-@cli.command()
-@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
-@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
 @click.option("--amount", required=True, type=Decimal)
 def require_balance(username, password, amount):
     """Checks a balance to be exactly the expected amount. Exits if balance is invalid."""
@@ -138,8 +123,8 @@ def require_balance(username, password, amount):
 @cli.command()
 @click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
 @click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
-def list_bonds(username, password):
-    """List family bonds for the 500+ program."""
+def bonds(username, password):
+    """List all currently available bonds."""
     client = ObligacjeSkarbowe(username, password)
     client.login()
     try:
@@ -155,18 +140,19 @@ def list_bonds(username, password):
 @click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
 @click.option("--symbol", required=True)
 @click.option("--amount", required=True, type=int)
-def buy(username, password, symbol, amount):
+@click.option("--dry-run", is_flag=True)
+def buy(username, password, symbol, amount, dry_run):
     """Performs automatic purchase of a most recent bond i.e. "ROD" buys current RODXY bond."""
     client = ObligacjeSkarbowe(username, password)
     client.login()
     try:
         expanded_symbol = None
 
-        bonds_list = client.list_500plus()
+        bonds_list = client.list_bonds()
         for available_bond in bonds_list:
             if available_bond.emisja.startswith(symbol):
                 click.echo(
-                    f"Found a matching bond {available_bond.emisja} with an interest of {available_bond.oprocentowanie:.02f}"
+                    f"Found a matching bond {available_bond.emisja} with an interest of {available_bond.oprocentowanie:.02f}%"
                 )
                 expanded_symbol = available_bond.emisja
                 break
@@ -175,6 +161,13 @@ def buy(username, password, symbol, amount):
             click.echo(f"Symbol {symbol} not found. Available bonds:", err=True)
             click.echo(tabulate_available_bonds(bonds_list), err=True)
             sys.exit(1)
+            return
+
+        click.echo(f"Matched {expanded_symbol}")
+
+        if dry_run:
+            click.echo("Bye...")
+            return
 
         try:
             client.purchase(expanded_symbol, amount)

@@ -18,6 +18,7 @@ from obligacjeskarbowe.parser import (
     extract_javax_view_state,
     extract_purchase_step_title,
     extract_two_columns,
+    parse_duration,
     parse_szt,
     parse_tak_nie,
     parse_xml_redirect,
@@ -350,3 +351,32 @@ def test_extract_data_przyjecia():
         )
     )
     assert timestamp == datetime.datetime(2023, 5, 10, 18, 3, 47)
+
+
+def test_parse_duration():
+    DATA = [
+        ('3-miesięczne', 3),
+        ('3-miesięczne', 3),
+        ('roczne', 12),
+        ('roczne', 12),
+        ('1-miesięczne', 1),
+        ('1-letnia', 12),
+        ('2-letnie', 24),
+        ('2-letnie', 24),
+        ('2-letnia', 24),
+        ('2-letnia', 24),
+        ('3-letnie', 36),
+        ('3-letnie', 36),
+        ('4-letnie', 48),
+        ('4-letnie', 48),
+        ('10-letnia', 120),
+        ('10-letnia', 120),
+        ('6-letnie', 72),
+        ('6-letnie', 72),
+        ('12-letnie', 144),
+        ('12-letnie', 144),
+        ('1234523-miesięczne', 1234523),
+        ('1234523-letnia', 1234523 * 12),
+    ]
+    for (input, output) in DATA:
+        assert parse_duration(input) == output

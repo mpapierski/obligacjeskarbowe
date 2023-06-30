@@ -16,7 +16,7 @@ In case of ROS/ROD bonds you'll have to always remember each month for 18 years 
 - [x] List available bonds in 500+ program ("Rodzinne Obligacje Skarbowe")
 - [x] Buy ROS, ROD ("Rodzinne Obligacje Skarbowe")
 - [ ] Log in through "Bank Pekao" credentials (this link: https://www.pekao.com.pl/obligacje-skarbowe).
-- [ ] Buy OTS, ROR, DOR, TOS, COI, EDO series ("obligacje Skarbu Państwa")
+- [x] Buy OTS, ROR, DOR, TOS, COI, EDO series ("obligacje Skarbu Państwa")
 - [ ] Konto IKE-Obligacje
 
 # How to use
@@ -28,8 +28,8 @@ Options:
   --help  Show this message and exit.
 
 Commands:
+  bonds            List all currently available bonds.
   buy              Performs automatic purchase of a most recent bond i.e.
-  family-500plus   List family bonds for the 500+ program.
   portfolio
   require-balance  Checks a balance to be exactly the expected amount.
 ```
