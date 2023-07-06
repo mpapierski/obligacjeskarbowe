@@ -168,7 +168,8 @@ def test_available_bonds():
         features="html.parser",
     )
     print(extract_available_bonds(bs))
-    assert extract_available_bonds(bs) == [
+    extracted_bonds = extract_available_bonds(bs)
+    assert extracted_bonds == [
         AvailableBond(
             rodzaj="6-letnie",
             emisja="ROS0529",
@@ -188,6 +189,8 @@ def test_available_bonds():
             wybierz={"s": "dostepneEmisje:j_idt138:1:wybierz", "u": "dostepneEmisje"},
         ),
     ]
+    assert extracted_bonds[0].dlugosc == 6 * 12
+    assert extracted_bonds[1].dlugosc == 12 * 12
 
 
 def test_parse_redirect():

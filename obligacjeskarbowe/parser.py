@@ -116,7 +116,10 @@ class AvailableBond:
     oprocentowanie: Decimal
     list_emisyjny: str
     wybierz: str
-    dlugosc: int
+
+    @property
+    def dlugosc(self):
+        return parse_duration(self.rodzaj)
 
 
 def parse_emisja(text):
@@ -176,7 +179,6 @@ def extract_available_bonds(bs):
         wybierz_onclick = tds[4].find("a").attrs["onclick"]
         wybierz = parse_wybierz_onclick(wybierz_onclick)
 
-        dlugosc = parse_duration(rodzaj)
         available.append(
             AvailableBond(
                 rodzaj=rodzaj,
@@ -186,7 +188,6 @@ def extract_available_bonds(bs):
                 oprocentowanie=oprocentowanie,
                 list_emisyjny=list_emisyjny,
                 wybierz=wybierz,
-                dlugosc=dlugosc,
             )
         )
 
