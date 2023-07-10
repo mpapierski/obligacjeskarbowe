@@ -116,6 +116,7 @@ class AvailableBond:
     oprocentowanie: Decimal
     list_emisyjny: str
     wybierz: str
+    path: str
 
     @property
     def dlugosc(self):
@@ -161,7 +162,7 @@ def parse_wybierz_onclick(text):
         raise RuntimeError(f"Unexpected onclick code found {text!r}")
 
 
-def extract_available_bonds(bs):
+def extract_available_bonds(bs, path):
     tbody = bs.select('tbody[id^="dostepneEmisje:j_idt"]')  # Match only beggining
 
     available = []
@@ -188,6 +189,7 @@ def extract_available_bonds(bs):
                 oprocentowanie=oprocentowanie,
                 list_emisyjny=list_emisyjny,
                 wybierz=wybierz,
+                path=path,
             )
         )
 
@@ -196,7 +198,10 @@ def extract_available_bonds(bs):
 
 def parse_xml_redirect(html):
     bs = BeautifulSoup(html, features="xml")
-    return bs.find("redirect").attrs["url"]
+    try:
+        return bs.find("redirect").attrs["url"]
+    except AttributeError:
+        print(f"{html}")
 
 
 def extract_form_action_by_id(bs, form_id):

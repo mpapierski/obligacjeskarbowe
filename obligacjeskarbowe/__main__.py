@@ -173,7 +173,7 @@ def buy(username, password, symbol, amount, dry_run):
             client.purchase(expanded_symbol, amount)
         except Exception as error:
             click.echo(f"Wystąpił błąd: {error}")
-            sys.exit(1)
+            raise
 
     finally:
         client.logout()

@@ -56,25 +56,25 @@ class ObligacjeSkarbowe:
         self.session.cookies.set("obligacje_set", "none")
         log.info("Logged in")
 
-    def __bonds(self, path):
+    def __bonds_navigate(self, path):
+        """Navigate bonds page, does not maintain internal lookup database."""
         r = self.session.get(f"{self.base_url}{path}")
         r.raise_for_status()
-
         bs = BeautifulSoup(r.content, features="html.parser")
-
-        new_available_bonds = extract_available_bonds(bs)
-        self.available_bonds += new_available_bonds
-
+        available_bonds = extract_available_bonds(bs, path)
         self.next_url = extract_form_action_by_id(bs, form_id="dostepneEmisje")
         self.view_state = extract_javax_view_state(bs)
+        return available_bonds
 
+    def __bonds(self, path):
+        """Extracts list of bonds but also maintains a lookup database."""
+        new_available_bonds = self.__bonds_navigate(path)
+        self.available_bonds += new_available_bonds
         new_bonds_lookup = OrderedDict(
-            [(bond.emisja, bond.wybierz) for bond in self.available_bonds]
+            [(bond.emisja, bond) for bond in self.available_bonds]
         )
         self.available_bonds_lookup.update(new_bonds_lookup)
-
         log.info(f"Found {len(new_bonds_lookup)} bonds at {path}")
-
         return new_available_bonds
 
     def list_bonds(self):
@@ -156,7 +156,13 @@ class ObligacjeSkarbowe:
         log.info(f"Krok 2: {title}...")
 
     def purchase_step_1(self, emisja):
-        wybierz = self.available_bonds_lookup[emisja]  # dict(s, u)
+        # TODO: Remove `available_bonds_lookup`
+        available_bond = self.available_bonds_lookup[emisja]  # dict(s, u)
+
+        # Navigate to appropriate path for a given bond since the order of page visits matters.
+        _available_bonds = self.__bonds_navigate(available_bond.path)
+
+        wybierz = available_bond.wybierz
         bs = self.__javax_post(s=wybierz["s"], u=wybierz["u"])
         self.next_url = extract_form_action_by_id(bs, form_id="daneDyspozycji")
 
