@@ -8,7 +8,7 @@ from obligacjeskarbowe.parser import (
     extract_available_bonds,
     extract_balance,
     extract_bonds,
-    extract_dane_dyspozycji_500,
+    extract_dane_dyspozycji,
     extract_data_przyjecia_zlecenia,
     extract_form_action_by_id,
     extract_javax_view_state,
@@ -113,9 +113,21 @@ class ObligacjeSkarbowe:
                 f"Dostępne saldo {dane_dyspozycji.saldo_srodkow_pienieznych.amount:.02f} {dane_dyspozycji.saldo_srodkow_pienieznych.currency} jest mniejsze niż oczekiwany koszt zakupu {expected_cost}"
             )
 
-        if dane_dyspozycji.maksymalnie < amount:
+        maksymalnie = dane_dyspozycji.maksymalnie
+        if maksymalnie is None:
+            # ROS/ROD have a maximum monthly cap, but other's don't have so we need to calculate based on amounts provided.
+            assert (
+                dane_dyspozycji.saldo_srodkow_pienieznych.currency
+                == dane_dyspozycji.wartosc_nominalna.currency
+            )
+            maksymalnie = (
+                dane_dyspozycji.saldo_srodkow_pienieznych.amount
+                / dane_dyspozycji.wartosc_nominalna.amount
+            )
+
+        if maksymalnie < amount:
             raise RuntimeError(
-                f"Maksymalna dostępna ilość obligacji {dane_dyspozycji.kod_emisji} ({dane_dyspozycji.maksymalnie}) jest mniejsza niż oczekiwana ({amount})"
+                f"Maksymalna dostępna ilość obligacji {dane_dyspozycji.kod_emisji} ({maksymalnie}) jest mniejsza niż oczekiwana ({amount})"
             )
 
         if not dane_dyspozycji.zgodnosc:
@@ -169,7 +181,7 @@ class ObligacjeSkarbowe:
         title = extract_purchase_step_title(bs)
         log.info(f"Krok 1: {title}...")
 
-        return extract_dane_dyspozycji_500(bs)
+        return extract_dane_dyspozycji(bs)
 
     def logout(self):
         """Logs out."""

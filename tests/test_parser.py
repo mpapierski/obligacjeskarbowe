@@ -12,7 +12,7 @@ from obligacjeskarbowe.parser import (
     extract_available_bonds,
     extract_balance,
     extract_bonds,
-    extract_dane_dyspozycji_500,
+    extract_dane_dyspozycji,
     extract_data_przyjecia_zlecenia,
     extract_form_action_by_id,
     extract_javax_view_state,
@@ -167,8 +167,7 @@ def test_available_bonds():
 </tbody>""",
         features="html.parser",
     )
-    print(extract_available_bonds(bs))
-    extracted_bonds = extract_available_bonds(bs)
+    extracted_bonds = extract_available_bonds(bs, path="/foo.html")
     assert extracted_bonds == [
         AvailableBond(
             rodzaj="6-letnie",
@@ -178,6 +177,7 @@ def test_available_bonds():
             oprocentowanie=Decimal("7.20"),
             list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROS0529",
             wybierz={"s": "dostepneEmisje:j_idt138:0:wybierz", "u": "dostepneEmisje"},
+            path="/foo.html",
         ),
         AvailableBond(
             rodzaj="12-letnie",
@@ -187,6 +187,7 @@ def test_available_bonds():
             oprocentowanie=Decimal("7.50"),
             list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROD0535",
             wybierz={"s": "dostepneEmisje:j_idt138:1:wybierz", "u": "dostepneEmisje"},
+            path="/foo.html",
         ),
     ]
     assert extracted_bonds[0].dlugosc == 6 * 12
@@ -229,7 +230,7 @@ def test_parse_tak_nie():
     assert parse_tak_nie("NIE") == False
 
 
-def test_extract_dane_dyspozycji():
+def test_extract_dane_dyspozycji_500():
     bs = BeautifulSoup(
         r"""<h4><strong>Obligacje</strong></h4>
 <span class="formlabel-230 formlabel-base">Kod emisji</span><span class="formfield-base"
@@ -303,7 +304,7 @@ szt
 """,
         features="html.parser",
     )
-    dane = extract_dane_dyspozycji_500(bs)
+    dane = extract_dane_dyspozycji(bs)
     assert dane == DaneDyspozycji(
         kod_emisji="QWER0101",
         pelna_nazwa_emisji="asdf zxcv qwer",
@@ -311,6 +312,66 @@ szt
         wartosc_nominalna=Money(amount=Decimal("999.99"), currency="PLN"),
         maksymalnie=123456789,
         saldo_srodkow_pienieznych=Money(amount=Decimal("1000000.00"), currency="PLN"),
+        zgodnosc=True,
+    )
+
+
+def test_extract_dane_dyspozycji():
+    bs = bs = BeautifulSoup(
+        r"""<h4><strong>Obligacje</strong></h4>
+				<span class="formlabel-230 formlabel-base">Kod emisji</span><span class="formfield-base" style="font-weight: bold;">QWER0101</span>
+				<br />
+
+				<span class="formlabel-230 formlabel-base">Pełna nazwa emisji</span><span class="formfield-base" style="font-weight: bold;">EMERYTALNYCH DZIESIĘCIOLETNICH OSZCZĘDNOŚCIOWYCH </span>
+				<br />
+
+				<span class="formlabel-230 formlabel-base"> </span><span class="formfield-base" style="font-weight: bold;">OBLIGACJI SKARBOWYCH</span>
+				<br />
+
+				<span class="formlabel-230 formlabel-base">Oprocentowanie</span><span class="formfield-base" style="font-weight: bold;">999,99%</span>
+				<br />
+
+				<span class="formlabel-230 formlabel-base">Wartość nominalna jednej obligacji</span><span id="daneDyspozycji:testWartosc" class="formfield-base" style="font-weight: bold;">555,55 PLN</span>
+				<br />
+
+				<hr class="append-bottom prepend-top" />
+
+				<h4><strong>Uzupełnij informacje</strong></h4>
+
+				<script type="text/javascript">
+					function updateWartoscZamawianychObligacji(value){
+						if(!isNaN(value)) {
+							var wartoscZamawianychObligacji = document.getElementById('daneDyspozycji:uxWartoscZamawianychObligacji');
+							var cenaSprzedazy = document.getElementById('daneDyspozycji:uxCenaSprzedazy');
+							wartoscZamawianychObligacji.textContent = (value * cenaSprzedazy.textContent).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$& ').replace('.',',') + ' PLN';
+						}
+					};
+				</script><label id="daneDyspozycji:uxCenaSprzedazy" class="ui-outputlabel ui-widget ui-helper-hidden">100</label><label id="daneDyspozycji:j_idt140" class="ui-outputlabel ui-widget formlabelXXL text" for="daneDyspozycji:liczbaZamiawianychObligacji">Liczba zamawianych obligacji<span class="ui-outputlabel-rfi">*</span></label><input id="daneDyspozycji:liczbaZamiawianychObligacji" name="daneDyspozycji:liczbaZamiawianychObligacji" type="text" autocomplete="off" maxlength="7" onkeyup="updateWartoscZamawianychObligacji(this.value);" style="float: none" aria-required="true" class="ui-inputfield ui-inputtext ui-widget ui-state-default ui-corner-all span-6" /><script id="daneDyspozycji:liczbaZamiawianychObligacji_s" type="text/javascript">PrimeFaces.cw("InputText","widget_daneDyspozycji_liczbaZamiawianychObligacji",{id:"daneDyspozycji:liczbaZamiawianychObligacji"});</script> szt.
+				<div id="daneDyspozycji:j_idt142" aria-live="polite" class="error errorBlock noerrorlabelXXL ui-message"></div>
+				<br />
+                <span class="formlabel-230 formlabel-base">Wartość zamawianych obligacji PLN</span><span id="daneDyspozycji:uxWartoscZamawianychObligacji" class="formfield-base" style="font-weight: bold;">0,00 PLN</span>
+
+				<hr class="append-bottom prepend-top" />
+				<h4><strong>Gotówka</strong></h4>
+				<span class="formlabel-230 formlabel-base">Saldo środków pieniężnych</span><span class="formfield-base" style="font-weight: bold;">66 6666,42 PLN</span>
+				<hr class="space" />
+                    <hr class="append-bottom prepend-top" />
+
+                    <span class="formlabel-230 formlabel-base">Czy transakcja jest zgodna z Grupą docelową?</span><span class="formfield-base" style="font-weight: bold; vertical-align: top;">TAK</span>
+                    <br />
+
+                    <span class="formlabel-230 formlabel-base" style="vertical-align: top;">Koszt transakcji:</span><span class="formfield-base" style="font-weight: bold; width: 330px;">Klient nie ponosi opłat przy zakupie obligacji.<br/>                                      Wysokość opłaty za przedterminowy wykup obligacji                                      określa List emisyjny danej emisji obligacji.</span>
+                    <br />""",
+        features="html.parser",
+    )
+    dane = extract_dane_dyspozycji(bs)
+    assert dane == DaneDyspozycji(
+        kod_emisji="QWER0101",
+        pelna_nazwa_emisji="EMERYTALNYCH DZIESIĘCIOLETNICH OSZCZĘDNOŚCIOWYCH OBLIGACJI SKARBOWYCH",
+        oprocentowanie=Decimal("999.99"),
+        wartosc_nominalna=Money(amount=Decimal("555.55"), currency="PLN"),
+        maksymalnie=None,
+        saldo_srodkow_pienieznych=Money(amount=Decimal("666666.42"), currency="PLN"),
         zgodnosc=True,
     )
 
@@ -358,28 +419,28 @@ def test_extract_data_przyjecia():
 
 def test_parse_duration():
     DATA = [
-        ('3-miesięczne', 3),
-        ('3-miesięczne', 3),
-        ('roczne', 12),
-        ('roczne', 12),
-        ('1-miesięczne', 1),
-        ('1-letnia', 12),
-        ('2-letnie', 24),
-        ('2-letnie', 24),
-        ('2-letnia', 24),
-        ('2-letnia', 24),
-        ('3-letnie', 36),
-        ('3-letnie', 36),
-        ('4-letnie', 48),
-        ('4-letnie', 48),
-        ('10-letnia', 120),
-        ('10-letnia', 120),
-        ('6-letnie', 72),
-        ('6-letnie', 72),
-        ('12-letnie', 144),
-        ('12-letnie', 144),
-        ('1234523-miesięczne', 1234523),
-        ('1234523-letnia', 1234523 * 12),
+        ("3-miesięczne", 3),
+        ("3-miesięczne", 3),
+        ("roczne", 12),
+        ("roczne", 12),
+        ("1-miesięczne", 1),
+        ("1-letnia", 12),
+        ("2-letnie", 24),
+        ("2-letnie", 24),
+        ("2-letnia", 24),
+        ("2-letnia", 24),
+        ("3-letnie", 36),
+        ("3-letnie", 36),
+        ("4-letnie", 48),
+        ("4-letnie", 48),
+        ("10-letnia", 120),
+        ("10-letnia", 120),
+        ("6-letnie", 72),
+        ("6-letnie", 72),
+        ("12-letnie", 144),
+        ("12-letnie", 144),
+        ("1234523-miesięczne", 1234523),
+        ("1234523-letnia", 1234523 * 12),
     ]
-    for (input, output) in DATA:
+    for input, output in DATA:
         assert parse_duration(input) == output

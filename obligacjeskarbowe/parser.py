@@ -240,14 +240,18 @@ def parse_tak_nie(text):
         raise RuntimeError(f"Expected TAK or NIE but received {text}")
 
 
-def extract_dane_dyspozycji_500(bs):
+def extract_dane_dyspozycji(bs):
     text = dict(extract_two_columns(bs))
-
     pelna_nazwa_emisji_1 = text.pop("Pełna nazwa emisji").strip()
     pelna_nazwa_emisji_2 = text.pop("").strip()
     oprocentowanie = parse_oprocentowanie(text.pop("Oprocentowanie"))
     wartosc_nominalna = parse_balance(text.pop("Wartość nominalna jednej obligacji"))
-    maksymalnie = parse_szt(text.pop("Maksymalnie"))
+
+    if maksymalnie_text := text.get("Maksymalnie"):
+        maksymalnie = parse_szt(maksymalnie_text)
+    else:
+        maksymalnie = None
+
     saldo_srodkow_pienieznych = parse_balance(text.pop("Saldo środków pieniężnych"))
     zgodnosc = parse_tak_nie(text.pop("Czy transakcja jest zgodna z Grupą docelową?"))
 
