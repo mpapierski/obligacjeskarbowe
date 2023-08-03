@@ -3,6 +3,7 @@ import json
 import re
 from datetime import date, datetime
 from decimal import Decimal
+import sys
 
 from bs4 import BeautifulSoup
 
@@ -62,7 +63,6 @@ def parse_tooltip(text):
 
 
 def extract_bonds(bs):
-    # tbody = bs.find_all("tbody", id="stanRachunku:j_idt140_data")
     tbody = bs.select('tbody[id^="stanRachunku:j_idt"]')  # Match only beggining
     # assert len(tbody) == 1, f'{len(tbody)}', list(map(lambda tb: tb.attrs['id'], bs.find_all('tbody')))
     tbody = tbody[0]
@@ -311,3 +311,49 @@ def parse_duration(input_text):
         return 12
     else:
         raise ValueError("Unable to parse duration")
+
+
+RE_KOD_NUMER = re.compile(r"^(\w{3}\d{4})/(\d+)$")
+
+
+@dataclass
+class History:
+    data_dyspozycji: datetime
+    rodzaj_dyspozycji: str
+    kod_obligacji: str
+    nr_zapisu: int
+    seria: int
+    liczba_obligacji: int
+    kwota_operacji: Decimal
+    status: str
+    uwagi: str
+
+
+def parse_history(bs):
+    tbody = bs.select('tbody[id="historia:tbl_data"]')[0]
+    history = []
+    for tr in tbody.find_all("tr"):
+        tds = tr.find_all("td")
+        data_dyspozycji = date.fromisoformat(tds[0].text)
+        rodzaj_dyspozycji = tds[1].text
+        kod_obligacji = tds[2].text  # XYZ1234/6666
+        numer_zapisu = int(tds[3].text)
+        seria = int(tds[4].text)
+        liczba_obligacji = int(tds[5].text)
+        kwota = Decimal(tds[6].text)
+        status = tds[7].text
+        uwagi = tds[8].text
+        history += [
+            History(
+                data_dyspozycji=data_dyspozycji,
+                rodzaj_dyspozycji=rodzaj_dyspozycji,
+                kod_obligacji=kod_obligacji,
+                nr_zapisu=numer_zapisu,
+                seria=seria,
+                liczba_obligacji=liczba_obligacji,
+                kwota_operacji=kwota,
+                status=status,
+                uwagi=uwagi,
+            )
+        ]
+    return history

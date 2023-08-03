@@ -8,6 +8,7 @@ from obligacjeskarbowe.parser import (
     AvailableBond,
     Bond,
     DaneDyspozycji,
+    History,
     Money,
     extract_available_bonds,
     extract_balance,
@@ -19,6 +20,7 @@ from obligacjeskarbowe.parser import (
     extract_purchase_step_title,
     extract_two_columns,
     parse_duration,
+    parse_history,
     parse_szt,
     parse_tak_nie,
     parse_xml_redirect,
@@ -444,3 +446,58 @@ def test_parse_duration():
     ]
     for input, output in DATA:
         assert parse_duration(input) == output
+
+
+def test_parse_history():
+    bs = BeautifulSoup(
+        r"""<tbody class="ui-datatable-data ui-widget-content" id="historia:tbl_data">
+										<tr class="ui-widget-content ui-datatable-even" data-ri="0" role="row">
+											<td role="gridcell">2010-01-23</td>
+											<td role="gridcell">dyspozycja zakupu</td>
+											<td role="gridcell">FOO123</td>
+											<td role="gridcell">9999</td>
+											<td role="gridcell">50</td>
+											<td role="gridcell">10</td>
+											<td role="gridcell">33335</td>
+											<td role="gridcell">zrealizowana</td>
+											<td role="gridcell"></td>
+										</tr>
+															<tr class="ui-widget-content ui-datatable-even" data-ri="0" role="row">
+											<td role="gridcell">2010-01-24</td>
+											<td role="gridcell">zakup papierów</td>
+											<td role="gridcell">FOO123</td>
+											<td role="gridcell">9999</td>
+											<td role="gridcell">50</td>
+											<td role="gridcell">10</td>
+											<td role="gridcell">33335</td>
+											<td role="gridcell">zrealizowana</td>
+											<td role="gridcell">tu są uwagi</td>
+										</tr>
+                       </tbody>""",
+        features="html.parser",
+    )
+    history = parse_history(bs)
+    assert history == [
+        History(
+            data_dyspozycji=datetime.date(2010, 1, 23),
+            rodzaj_dyspozycji="dyspozycja zakupu",
+            kod_obligacji="FOO123",
+            nr_zapisu=9999,
+            seria=50,
+            liczba_obligacji=10,
+            kwota_operacji=Decimal("33335"),
+            status="zrealizowana",
+            uwagi="",
+        ),
+        History(
+            data_dyspozycji=datetime.date(2010, 1, 24),
+            rodzaj_dyspozycji="zakup papierów",
+            kod_obligacji="FOO123",
+            nr_zapisu=9999,
+            seria=50,
+            liczba_obligacji=10,
+            kwota_operacji=Decimal("33335"),
+            status="zrealizowana",
+            uwagi="tu są uwagi",
+        ),
+    ]

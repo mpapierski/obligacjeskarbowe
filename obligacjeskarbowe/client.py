@@ -13,6 +13,7 @@ from obligacjeskarbowe.parser import (
     extract_form_action_by_id,
     extract_javax_view_state,
     extract_purchase_step_title,
+    parse_history,
     parse_xml_redirect,
 )
 
@@ -182,6 +183,30 @@ class ObligacjeSkarbowe:
         log.info(f"Krok 1: {title}...")
 
         return extract_dane_dyspozycji(bs)
+
+    def history(self, from_date, to_date):
+        """Retrieves a history of dispositions on your account."""
+        r = self.session.get(self.base_url + "/historiaDyspozycji.html")
+        r.raise_for_status()
+        bs = BeautifulSoup(r.content, features="html.parser")
+        self.next_url = extract_form_action_by_id(bs, form_id="datyHistorii")
+        self.view_state = extract_javax_view_state(bs)
+
+        s = "datyHistorii:ok"
+        u = "datyHistorii"
+
+        data_od = from_date.strftime("%Y-%m-%d")
+        data_do = to_date.strftime("%Y-%m-%d")
+
+        bs = self.__javax_post(
+            s,
+            u,
+            extra_javax_kwargs={
+                "datyHistorii:dataOd_input": data_od,
+                "datyHistorii:dataDo_input": data_do,
+            },
+        )
+        return parse_history(bs)
 
     def logout(self):
         """Logs out."""

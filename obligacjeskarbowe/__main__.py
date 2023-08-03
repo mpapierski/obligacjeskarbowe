@@ -1,13 +1,16 @@
 from collections import OrderedDict
 import dataclasses
+from datetime import datetime, timedelta
 from decimal import Decimal
 import logging
 import sys
 import click
+from tablib import Dataset
 
 from tabulate import tabulate
 from obligacjeskarbowe.client import ObligacjeSkarbowe
 from obligacjeskarbowe.parser import DEFAULT_CURRENCY
+from dateutil.relativedelta import relativedelta
 
 
 def display_money(money):
@@ -75,6 +78,44 @@ def tabulate_available_bonds(available_bonds):
         ["Długość (mc)", "Emisja", "Od", "Do", "Oprocentowanie"],
         tablefmt="fancy_grid",
     )
+
+
+HISTORY_COLUMNS = (
+    "Data dyspozycji",
+    "Rodzaj dyspozycji",
+    "Kod obligacji",
+    "Numer zapisu",
+    "Seria",
+    "Liczba obligacji",
+    "Kwota operacji",
+    "Status",
+    "Uwagi",
+)
+
+
+def tabulate_history(history):
+    rows = []
+    for item in history:
+        d = dataclasses.asdict(item, dict_factory=OrderedDict)
+        rows.append(d)
+
+    attrs = (
+        "data_dyspozycji",
+        "rodzaj_dyspozycji",
+        "kod_obligacji",
+        "nr_zapisu",
+        "seria",
+        "liczba_obligacji",
+        "kwota_operacji",
+        "status",
+        "uwagi",
+    )
+
+    headers = OrderedDict(
+        zip(attrs, HISTORY_COLUMNS),
+    )
+
+    return tabulate(rows, headers, tablefmt="fancy_grid")
 
 
 @click.group()
@@ -175,6 +216,33 @@ def buy(username, password, symbol, amount, dry_run):
             click.echo(f"Wystąpił błąd: {error}")
             raise
 
+    finally:
+        client.logout()
+
+
+@cli.command()
+@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
+@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
+@click.option("--format", type=click.Choice(["csv", "xlsx", "json"]))
+@click.option("--output", type=click.File("w"), default=sys.stdout)
+def history(username, password, format, output):
+    """History of dispositions on your account."""
+    client = ObligacjeSkarbowe(username, password)
+    client.login()
+    try:
+        to_date = datetime.now()
+        from_date = to_date - relativedelta(months=3)
+        history = client.history(from_date=from_date, to_date=to_date)
+        if format is None:
+            click.echo(tabulate_history(history), err=True)
+        else:
+            dataset = Dataset()
+            dataset.headers = HISTORY_COLUMNS
+            for row in history:
+                row_value = dataclasses.astuple(row)
+                dataset.append(row_value)
+            exported = dataset.export(format)
+            output.write(exported)
     finally:
         client.logout()
 
