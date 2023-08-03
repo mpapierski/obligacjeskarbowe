@@ -3,7 +3,6 @@ import json
 import re
 from datetime import date, datetime
 from decimal import Decimal
-import sys
 
 from bs4 import BeautifulSoup
 

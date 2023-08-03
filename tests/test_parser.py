@@ -1,9 +1,7 @@
 import datetime
 from decimal import Decimal
-import sys
 
 from bs4 import BeautifulSoup
-from tabulate import tabulate
 from obligacjeskarbowe.parser import (
     AvailableBond,
     Bond,
@@ -18,7 +16,6 @@ from obligacjeskarbowe.parser import (
     extract_form_action_by_id,
     extract_javax_view_state,
     extract_purchase_step_title,
-    extract_two_columns,
     parse_duration,
     parse_history,
     parse_szt,
