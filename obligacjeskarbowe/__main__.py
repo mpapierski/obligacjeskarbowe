@@ -120,7 +120,7 @@ def tabulate_history(history):
 
 @click.group()
 def cli():
-    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 
 @cli.command()
