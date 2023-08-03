@@ -223,15 +223,19 @@ def buy(username, password, symbol, amount, dry_run):
 @cli.command()
 @click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
 @click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
+@click.option(
+    "--from-date",
+    type=click.DateTime(["%Y-%m-%d"]),
+    default=datetime.now() - relativedelta(months=3),
+)
+@click.option("--to-date", type=click.DateTime(["%Y-%m-%d"]), default=datetime.now())
 @click.option("--format", type=click.Choice(["csv", "xlsx", "json"]))
 @click.option("--output", type=click.File("w"), default=sys.stdout)
-def history(username, password, format, output):
+def history(username, password, from_date, to_date, format, output):
     """History of dispositions on your account."""
     client = ObligacjeSkarbowe(username, password)
     client.login()
     try:
-        to_date = datetime.now()
-        from_date = to_date - relativedelta(months=3)
         history = client.history(from_date=from_date, to_date=to_date)
         if format is None:
             click.echo(tabulate_history(history), err=True)
