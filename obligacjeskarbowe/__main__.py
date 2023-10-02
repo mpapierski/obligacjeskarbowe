@@ -23,7 +23,10 @@ def tabulate_bonds(bonds):
         d = dataclasses.asdict(bond, dict_factory=OrderedDict)
         d["nominalna"] = display_money(bond.nominalna)
         d["aktualna"] = display_money(bond.aktualna)
-        d["oprocentowanie"] = f'{d["oprocentowanie"]:.02f}%'
+        d["okres"] = d["okresy"][-1]["okres"]
+        oprocentowanie = d["okresy"][-1]["oprocentowanie"]
+        d["oprocentowanie"] = f"{oprocentowanie:.02f}%"
+        del d["okresy"]
         rows.append(d)
 
     razem = sum([bond.dostepnych for bond in bonds])

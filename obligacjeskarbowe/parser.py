@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 import json
+import operator
 import re
 from datetime import date, datetime
 from decimal import Decimal
+from typing import List
 
 from bs4 import BeautifulSoup
 
@@ -29,13 +31,20 @@ def extract_balance(bs):
 
 
 def html_to_string(html):
-    return BeautifulSoup(html, features="html.parser").text
+    soup = BeautifulSoup(html, features="html.parser")
+    return soup.get_text("\n")
 
 
 @dataclass
 class Money:
     amount: Decimal
     currency: str
+
+
+@dataclass
+class InterestPeriod:
+    okres: int
+    oprocentowanie: Decimal
 
 
 @dataclass
@@ -47,18 +56,38 @@ class Bond:
     zablokowanych: int
     nominalna: Money
     aktualna: Money
-    okres: int
-    oprocentowanie: Decimal
+    okresy: List[InterestPeriod]
     data_wykupu: date
 
 
 def parse_tooltip(text):
     """This works well for ROD/RO"""
-    if m := re.match(r"^okres (\d+) oprocentowanie (\d+\.\d+)%$", text):
-        (okres, oprocentowanie) = m.groups()
-        return (int(okres), Decimal(oprocentowanie))
-    else:
-        raise RuntimeError(f"Unable to parse tooltip {text}")
+    results = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if m := re.match(r"^okres (\d+) oprocentowanie (\d+\.\d+)%$", line):
+            (okres, oprocentowanie) = m.groups()
+            okres = int(okres)
+            oprocentowanie = Decimal(oprocentowanie)
+            interest_period = InterestPeriod(okres=okres, oprocentowanie=oprocentowanie)
+            results += [interest_period]
+        else:
+            raise RuntimeError(f"Unable to parse tooltip {text!r}")
+
+    if not results:
+        raise RuntimeError(
+            f"There should be at least one interest period parsed in {text!r}"
+        )
+
+    assert results[0].okres == 1, "First interest period should be marked as 1"
+    assert sorted(map(operator.attrgetter("okres"), results))
+    assert len(results) / 2 * (results[0].okres + results[-1].okres) == sum(
+        map(operator.attrgetter("okres"), results)
+    )
+
+    return results
 
 
 def extract_bonds(bs):
@@ -89,7 +118,7 @@ def extract_bonds(bs):
         nominalna = parse_balance(tds[3].text.strip())
         aktualna = parse_balance(tds[4].text.strip())
         data_wykupu = date.fromisoformat(tds[5].text.strip())
-        (okres, oprocentowanie) = parse_tooltip(tooltip)
+        okresy_oprocentowania = parse_tooltip(tooltip)
         bonds.append(
             Bond(
                 emisja=emisja,
@@ -98,8 +127,7 @@ def extract_bonds(bs):
                 nominalna=nominalna,
                 aktualna=aktualna,
                 data_wykupu=data_wykupu,
-                okres=okres,
-                oprocentowanie=oprocentowanie,
+                okresy=okresy_oprocentowania,
             )
         )
 

@@ -1,5 +1,6 @@
 import datetime
 from decimal import Decimal
+import json
 
 from bs4 import BeautifulSoup
 from obligacjeskarbowe.parser import (
@@ -7,6 +8,7 @@ from obligacjeskarbowe.parser import (
     Bond,
     DaneDyspozycji,
     History,
+    InterestPeriod,
     Money,
     extract_available_bonds,
     extract_balance,
@@ -16,10 +18,12 @@ from obligacjeskarbowe.parser import (
     extract_form_action_by_id,
     extract_javax_view_state,
     extract_purchase_step_title,
+    html_to_string,
     parse_duration,
     parse_history,
     parse_szt,
     parse_tak_nie,
+    parse_tooltip,
     parse_xml_redirect,
 )
 
@@ -97,8 +101,7 @@ def test_extract_bonds():
             nominalna=Money(amount=Decimal("123000.00"), currency="PLN"),
             aktualna=Money(amount=Decimal("456111.22"), currency="PLN"),
             data_wykupu=datetime.date(2074, 10, 25),
-            okres=1,
-            oprocentowanie=Decimal("7.5"),
+            okresy=[InterestPeriod(okres=1, oprocentowanie=Decimal("7.5"))],
         ),
         Bond(
             emisja="ASDF1234",
@@ -107,8 +110,7 @@ def test_extract_bonds():
             nominalna=Money(amount=Decimal("456789.99"), currency="PLN"),
             aktualna=Money(amount=Decimal("987654.60"), currency="PLN"),
             data_wykupu=datetime.date(3011, 1, 1),
-            okres=1,
-            oprocentowanie=Decimal("7.5"),
+            okresy=[InterestPeriod(okres=1, oprocentowanie=Decimal("7.5"))],
         ),
     ]
 
@@ -498,3 +500,18 @@ def test_parse_history():
             uwagi="tu są uwagi",
         ),
     ]
+
+def test_html_to_string():
+    assert html_to_string('foo</br>bar') == 'foo\nbar'
+    assert html_to_string('foo<br/>bar') == 'foo\nbar'
+    assert html_to_string('foo<br>bar') == 'foo\nbar'
+    assert html_to_string('foo<br />bar') == 'foo\nbar'
+    assert html_to_string('foo<br/>bar</br>baz</br></br>') == 'foo\nbar\nbaz'
+
+def test_parse_tooltip():
+    assert parse_tooltip('okres 1 oprocentowanie 7.5%') == [InterestPeriod(1, Decimal('7.5'))]
+    assert parse_tooltip('okres 1 oprocentowanie 7.5%\n') == [InterestPeriod(1, Decimal('7.5'))]
+    assert parse_tooltip('okres 1 oprocentowanie 7.5%\nokres 2 oprocentowanie 15.0%\n') == [InterestPeriod(1, Decimal('7.5')), InterestPeriod(2, Decimal('15.0'))]
+    assert parse_tooltip('okres 1 oprocentowanie 7.5%\nokres 2 oprocentowanie 15.0%') == [InterestPeriod(1, Decimal('7.5')), InterestPeriod(2, Decimal('15.0'))]
+    assert parse_tooltip('okres 1 oprocentowanie 7.5%\nokres 2 oprocentowanie 15.0%\n\n') == [InterestPeriod(1, Decimal('7.5')), InterestPeriod(2, Decimal('15.0'))]
+    # assert parse_tooltip('')
