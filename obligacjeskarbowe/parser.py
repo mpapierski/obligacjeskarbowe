@@ -4,7 +4,7 @@ import operator
 import re
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List
+from typing import Dict, List
 
 from bs4 import BeautifulSoup
 
@@ -25,7 +25,8 @@ def parse_balance(balance):
 
 def extract_balance(bs):
     items = bs.select("span.formfield-base")
-    assert len(items) == 1, f"Expected 1 item but found {len(items)}"
+    if len(items) != 1:
+        raise RuntimeError(f"Expected 1 item but found {len(items)}")
     span = items[0]
     return parse_balance(span.text)
 
@@ -223,10 +224,34 @@ def extract_available_bonds(bs, path):
     return available
 
 
-def parse_xml_redirect(html):
+@dataclass
+class XMLResponse:
+    pass
+
+
+@dataclass
+class Redirect(XMLResponse):
+    url: str
+
+
+@dataclass
+class PartialResponse:
+    id: str
+    updates: dict
+
+
+def parse_xml_response(html):
     bs = BeautifulSoup(html, features="xml")
     try:
-        return bs.find("redirect").attrs["url"]
+        if redirect := bs.find("redirect"):
+            yield Redirect(url=redirect.attrs["url"])
+        elif partial_response := bs.find("partial-response"):
+            updates = {}
+            if changes := partial_response.find("changes"):
+                for update in changes.find_all("update"):
+                    updates[update.attrs["id"]] = update.text
+            yield PartialResponse(id=partial_response.attrs["id"], updates=updates)
+
     except AttributeError:
         print(f"{html}")
 

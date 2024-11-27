@@ -129,8 +129,11 @@ def cli():
 @cli.command()
 @click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
 @click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
-def portfolio(username, password):
-    client = ObligacjeSkarbowe(username, password)
+@click.option(
+    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
+)
+def portfolio(username, password, ntfy_topic):
+    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
     client.login()
 
     try:
@@ -149,9 +152,12 @@ def portfolio(username, password):
 @click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
 @click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
 @click.option("--amount", required=True, type=Decimal)
-def require_balance(username, password, amount):
+@click.option(
+    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
+)
+def require_balance(username, password, amount, ntfy_topic):
     """Checks a balance to be exactly the expected amount. Exits if balance is invalid."""
-    client = ObligacjeSkarbowe(username, password)
+    client = ObligacjeSkarbowe(username, password, ntfy_topic)
     client.login()
     try:
         if client.balance.amount != amount:

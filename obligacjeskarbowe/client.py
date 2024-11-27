@@ -1,10 +1,14 @@
 from collections import OrderedDict
 import logging
 import operator
+import time
 from bs4 import BeautifulSoup
 import requests
+from obligacjeskarbowe import two_factor
 
 from obligacjeskarbowe.parser import (
+    PartialResponse,
+    Redirect,
     extract_available_bonds,
     extract_balance,
     extract_bonds,
@@ -14,7 +18,7 @@ from obligacjeskarbowe.parser import (
     extract_javax_view_state,
     extract_purchase_step_title,
     parse_history,
-    parse_xml_redirect,
+    parse_xml_response,
 )
 
 
@@ -24,11 +28,16 @@ LOGIN_BATON = "Zaloguj"
 
 
 class ObligacjeSkarbowe:
-    def __init__(self, username, password):
+    def __init__(self, username, password, topic):
         self.base_url = "https://www.zakup.obligacjeskarbowe.pl"
         self.username = username
         self.password = password
         self.session = requests.Session()
+        self.session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/118.0"
+            }
+        )
 
         self.balance = None
         self.bonds = None
@@ -38,6 +47,8 @@ class ObligacjeSkarbowe:
 
         self.next_url = None
         self.view_state = None
+
+        self.topic = topic
 
     def login(self):
         """Performs a login procedure."""
@@ -52,6 +63,50 @@ class ObligacjeSkarbowe:
         r.raise_for_status()
 
         bs = BeautifulSoup(r.content, features="html.parser")
+        prompt = bs.select('span[id="spanContent"]')[0].text.strip()
+
+        if "Nie rozpoznaliśmy Twojego urządzenia." in prompt:
+            token_stream = two_factor.wait_for_token(self.topic)
+
+            open_event = next(token_stream)
+            if not isinstance(open_event, (two_factor.Open,)):
+                raise RuntimeError("Expected open event but got {open_event!r}")
+
+            self.next_url = extract_form_action_by_id(bs, form_id="j_idt89")
+            self.view_state = extract_javax_view_state(bs)
+
+            s = "j_idt89:j_idt97"  # "Dostęp jednorazowy"
+            u = "j_idt89"
+            bs = self.__javax_post(s, u)
+
+            with open("downloads/device_outcome.html", "w") as f:
+                f.write(str(bs))
+
+            two_factor_prompt = bs.select('span[id="spanContent"]')[0].text.strip()
+            print(f"Two factor prompt: {two_factor_prompt!r}")
+
+            s = "j_idt90:j_idt112"
+            u = "j_idt90"
+
+            print("Waiting for token...")
+
+            token = next(token_stream)
+
+            print(f"Received token {token!r}")
+
+            time.sleep(5)
+
+            ux_code = token.kod
+
+            bs = self.__javax_post(
+                s,
+                u,
+                extra_javax_kwargs={
+                    "j_idt90:uxCode": f"{ux_code}",
+                },
+            )
+            assert bs is not None
+
         self.balance = extract_balance(bs)
         self.bonds = extract_bonds(bs)
         self.session.cookies.set("obligacje_set", "none")
@@ -242,15 +297,39 @@ class ObligacjeSkarbowe:
 
         data.update(extra_javax_kwargs)
 
+        print(f'{data!r}')
+
         r = self.session.post(self.base_url + self.next_url, data=data)
         r.raise_for_status()
 
         # Handle weird XML document with <redirect url=""> instead of 3xx response
-        redirect_url = parse_xml_redirect(r.content)
+        events = parse_xml_response(r.content)
+        for event in events:
+            print(f"Partial response event {event!r}")
+            if isinstance(event, (Redirect,)):
+                redirect_url = event.url
+                r = self.session.get(self.base_url + redirect_url)
+                r.raise_for_status()
 
-        r = self.session.get(self.base_url + redirect_url)
-        r.raise_for_status()
+                bs = BeautifulSoup(r.content, features="html.parser")
+                self.view_state = extract_javax_view_state(bs)
+                return bs
 
-        bs = BeautifulSoup(r.content, features="html.parser")
-        self.view_state = extract_javax_view_state(bs)
-        return bs
+            elif isinstance(event, (PartialResponse,)):
+                new_view_state = None
+                for key, value in event.updates.items():
+                    if key == "j_id1:javax.faces.ViewState:0":
+                        new_view_state = value
+                    else:
+                        raise RuntimeError(f"Unexpected update field {event!r}")
+                self.view_state = new_view_state
+
+        # if redirect_url is None:
+        #     print(f'Received partial update? {r.content!r}... Skipping')
+        # else:
+        #     r = self.session.get(self.base_url + redirect_url)
+        #     r.raise_for_status()
+
+        #     bs = BeautifulSoup(r.content, features="html.parser")
+        #     self.view_state = extract_javax_view_state(bs)
+        #     return bs

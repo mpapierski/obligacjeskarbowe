@@ -6,10 +6,12 @@ from bs4 import BeautifulSoup
 from obligacjeskarbowe.parser import (
     AvailableBond,
     Bond,
+    PartialResponse,
     DaneDyspozycji,
     History,
     InterestPeriod,
     Money,
+    Redirect,
     extract_available_bonds,
     extract_balance,
     extract_bonds,
@@ -24,7 +26,7 @@ from obligacjeskarbowe.parser import (
     parse_szt,
     parse_tak_nie,
     parse_tooltip,
-    parse_xml_redirect,
+    parse_xml_response,
 )
 
 
@@ -196,11 +198,15 @@ def test_available_bonds():
 
 
 def test_parse_redirect():
-    url = parse_xml_redirect(
+    commands = list(parse_xml_response(
         r"""<?xml version='1.0' encoding='UTF-8'?>
 <partial-response id="j_id1"><redirect url="/zakupObligacji500Plus.html?execution=e2s2"></redirect></partial-response>"""
-    )
-    assert url == "/zakupObligacji500Plus.html?execution=e2s2"
+    ))
+    assert commands == [Redirect(url="/zakupObligacji500Plus.html?execution=e2s2")]
+
+def test_parse_partial_update_of_view_state():
+    commands = list(parse_xml_response('<?xml version=\'1.0\' encoding=\'UTF-8\'?>\n<partial-response id="j_id1"><changes><update id="j_id1:javax.faces.ViewState:0"><![CDATA[e1s1]]></update></changes></partial-response>'))
+    assert commands == [PartialResponse(id="j_id1", updates={'j_id1:javax.faces.ViewState:0': 'e1s1'})]
 
 
 def test_extract_form_action():
