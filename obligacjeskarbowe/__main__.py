@@ -1,6 +1,7 @@
+import tomllib
 from collections import OrderedDict
 import dataclasses
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 import logging
 import sys
@@ -11,6 +12,10 @@ from tabulate import tabulate
 from obligacjeskarbowe.client import ObligacjeSkarbowe
 from obligacjeskarbowe.parser import DEFAULT_CURRENCY
 from dateutil.relativedelta import relativedelta
+from obligacjeskarbowe.family800plus import (
+    calculate_total_compensation,
+    calculate_available_bonds,
+)
 
 
 def display_money(money):
@@ -269,6 +274,45 @@ def history(username, password, from_date, to_date, format, output, ntfy_topic):
                 dataset.append(row_value)
             exported = dataset.export(format)
             output.write(exported)
+    finally:
+        client.logout()
+
+
+@cli.command()
+@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
+@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
+@click.option(
+    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
+)
+@click.option("--dry-run", is_flag=True)
+@click.option("--config", type=click.Path(exists=True), default="800plus.toml")
+def verify_800plus(username, password, ntfy_topic, dry_run, config):
+    with open(config, "rb") as f:
+        config = tomllib.load(f)
+
+    # This has to be equal to a bank statement. Always
+    total_compensation = calculate_total_compensation(config)
+
+    if dry_run:
+        return
+
+    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
+    client.login()
+    try:
+        available_bonds = client.list_bonds()
+        click.echo(
+            f"Wartość dotychczas otrzymanego świadczenia rodzinnego 800+: {total_compensation}"
+        )
+        click.echo(
+            f"Wartość nominalna dotychczas zakupionych obligacji za środki przyznane w ramach programów wsparcia rodziny wynosi: {available_bonds.wartosc_nominalna_800plus.amount:.02f} {available_bonds.wartosc_nominalna_800plus.currency}"
+        )
+        buy_amount = calculate_available_bonds(
+            total_compensation, available_bonds.wartosc_nominalna_800plus.amount
+        )
+        click.echo(f"Ilość obligacji gotowych do zakupu: {buy_amount}")
+        click.echo(
+            f"Kwota wymagana do dokonania zakupu za cały limit: {buy_amount * 100} {DEFAULT_CURRENCY}"
+        )
     finally:
         client.logout()
 

@@ -223,6 +223,10 @@ class ObligacjeSkarbowe:
             saldo=saldo, emisje=new_available_bonds, wartosc_nominalna_800plus=None
         )
 
+    def list_500plus_bonds(self):
+        """Lists available bonds for 500+ program"""
+        return self.__bonds_800plus()
+
     def list_bonds(self):
         """Lists available bonds"""
         bonds_800plus = self.__bonds_800plus()
