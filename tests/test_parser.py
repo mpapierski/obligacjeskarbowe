@@ -20,6 +20,8 @@ from obligacjeskarbowe.parser import (
     extract_form_action_by_id,
     extract_javax_view_state,
     extract_purchase_step_title,
+    emisje_parse_saldo_srodkow_pienieznych,
+    emisje_parse_wartosc_nominalna_800plus,
     html_to_string,
     parse_duration,
     parse_history,
@@ -45,168 +47,179 @@ def test_extract_balance():
 
 def test_extract_bonds():
     bs = BeautifulSoup(
-        r"""<tbody id="stanRachunku:j_idt140_data" class="ui-datatable-data ui-widget-content">
-    <tr data-ri="0" class="ui-widget-content ui-datatable-even" role="row">
-        <td role="gridcell"><span id="stanRachunku:j_idt140:0:nazwaSkrocona"
-                style="font-size: 0.875em; font-style: normal; text-align: left; width: 100%; display: inline-block; white-space: nowrap;">ZXCV4567</span>
-            <script id="stanRachunku:j_idt140:0:j_idt154_s"
-                type="text/javascript">$(function () { PrimeFaces.cw("ExtTooltip", "widget_stanRachunku_j_idt140_0_j_idt154", { id: "stanRachunku:j_idt140:0:j_idt154", global: false, shared: false, autoShow: false, forTarget: "stanRachunku:j_idt140:0:nazwaSkrocona", content: { text: "okres 1 oprocentowanie 7.5%<\/br>" }, style: { widget: true }, show: { event: 'mouseenter', delay: 0, effect: function () { $(this).fadeIn(500); } }, hide: { event: 'mouseleave', delay: 0, fixed: false, effect: function () { $(this).fadeOut(500); } }, position: { at: 'bottom right', my: 'top left', adjust: { x: 0, y: 0 }, viewport: $(window) } }); });</script>
-        </td>
-        <td role="gridcell"><span
-                style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">5253</span>
-        </td>
-        <td role="gridcell"><span
-                style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">53</span>
-        </td>
-        <td role="gridcell"><span
-                style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">123 000,00 PLN</span>
-        </td>
-        <td role="gridcell"><span
-                style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">456 111,22 PLN</span>
-        </td>
-        <td role="gridcell"><span
-                style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">2074-10-25</span>
-        </td>
-    </tr>
-    <tr data-ri="1" class="ui-widget-content ui-datatable-odd" role="row">
-        <td role="gridcell"><span id="stanRachunku:j_idt140:1:nazwaSkrocona"
-                style="font-size: 0.875em; font-style: normal; text-align: left; width: 100%; display: inline-block; white-space: nowrap;">ASDF1234</span>
-            <script id="stanRachunku:j_idt140:1:j_idt154_s"
-                type="text/javascript">$(function () { PrimeFaces.cw("ExtTooltip", "widget_stanRachunku_j_idt140_1_j_idt154", { id: "stanRachunku:j_idt140:1:j_idt154", global: false, shared: false, autoShow: false, forTarget: "stanRachunku:j_idt140:1:nazwaSkrocona", content: { text: "okres 1 oprocentowanie 7.5%<\/br>" }, style: { widget: true }, show: { event: 'mouseenter', delay: 0, effect: function () { $(this).fadeIn(500); } }, hide: { event: 'mouseleave', delay: 0, fixed: false, effect: function () { $(this).fadeOut(500); } }, position: { at: 'bottom right', my: 'top left', adjust: { x: 0, y: 0 }, viewport: $(window) } }); });</script>
-        </td>
-        <td role="gridcell"><span
-                style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">999</span>
-        </td>
-        <td role="gridcell"><span
-                style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">998</span>
-        </td>
-        <td role="gridcell"><span
-                style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">456 789,99 PLN</span>
-        </td>
-        <td role="gridcell"><span
-                style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">987 654,60 PLN</span>
-        </td>
-        <td role="gridcell"><span
-                style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">3011-01-01</span>
-        </td>
-    </tr>
-</tbody>""",
+        r"""<tbody id="stanRachunku:j_idt171_data" class="ui-datatable-data ui-widget-content"><tr data-ri="0" class="ui-widget-content ui-datatable-even"><td role="gridcell"><span id="stanRachunku:j_idt171:0:nazwaSkrocona" style="font-size: 0.875em; font-style: normal; text-align: left; width: 100%; display: inline-block; white-space: nowrap;">ZXCV4567</span><script id="stanRachunku:j_idt171:0:j_idt185_s" type="text/javascript">$(function(){PrimeFaces.cw("ExtTooltip","widget_stanRachunku_j_idt171_0_j_idt185",{id:"stanRachunku:j_idt171:0:j_idt185",global:false,shared:false,autoShow:false,forTarget:"stanRachunku:j_idt171:0:nazwaSkrocona",content: {text: "okres 1 oprocentowanie 12.55%<\/br>okres 2 oprocentowanie 5.55%<\/br>"},style: {widget:true},show:{event:'mouseenter',delay:0,effect:function(){$(this).fadeIn(500);}},hide:{event:'mouseleave',delay:0,fixed:false,effect:function(){$(this).fadeOut(500);}},position: {at:'bottom right',my:'top left',adjust:{x:0,y:0},viewport:$(window)}});});</script></td><td role="gridcell"><span style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">999</span></td><td role="gridcell"><span style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">0</span></td><td role="gridcell"><span style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">11 1111,11 PLN</span></td><td role="gridcell"><span style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">33 3333,33 PLN</span></td><td role="gridcell"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">2033-08-01</span></td></tr><tr data-ri="1" class="ui-widget-content ui-datatable-odd"><td role="gridcell"><span id="stanRachunku:j_idt171:1:nazwaSkrocona" style="font-size: 0.875em; font-style: normal; text-align: left; width: 100%; display: inline-block; white-space: nowrap;">ASDF5555</span><script id="stanRachunku:j_idt171:1:j_idt185_s" type="text/javascript">$(function(){PrimeFaces.cw("ExtTooltip","widget_stanRachunku_j_idt171_1_j_idt185",{id:"stanRachunku:j_idt171:1:j_idt185",global:false,shared:false,autoShow:false,forTarget:"stanRachunku:j_idt171:1:nazwaSkrocona",content: {text: "okres 1 oprocentowanie 7.5%<\/br>okres 2 oprocentowanie 69%<\/br>okres 3 oprocentowanie 6.05%<\/br>"},style: {widget:true},show:{event:'mouseenter',delay:0,effect:function(){$(this).fadeIn(500);}},hide:{event:'mouseleave',delay:0,fixed:false,effect:function(){$(this).fadeOut(500);}},position: {at:'bottom right',my:'top left',adjust:{x:0,y:0},viewport:$(window)}});});</script></td><td role="gridcell"><span style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">666</span></td><td role="gridcell"><span style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">0</span></td><td role="gridcell"><span style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">55 5555,55 PLN</span></td><td role="gridcell"><span style="font-size: 0.875em; font-style: normal; text-align: right; width: 100%; display: inline-block; white-space: nowrap;">99 999,99 PLN</span></td><td role="gridcell"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">2043-10-25</span></td></tr></tbody>""",
         features="html.parser",
     )
     bonds = extract_bonds(bs)
+    print(bonds)
 
     assert bonds == [
         Bond(
             emisja="ZXCV4567",
-            dostepnych=5253,
-            zablokowanych=53,
-            nominalna=Money(amount=Decimal("123000.00"), currency="PLN"),
-            aktualna=Money(amount=Decimal("456111.22"), currency="PLN"),
-            data_wykupu=datetime.date(2074, 10, 25),
-            okresy=[InterestPeriod(okres=1, oprocentowanie=Decimal("7.5"))],
+            dostepnych=999,
+            zablokowanych=0,
+            nominalna=Money(amount=Decimal("111111.11"), currency="PLN"),
+            aktualna=Money(amount=Decimal("333333.33"), currency="PLN"),
+            okresy=[
+                InterestPeriod(okres=1, oprocentowanie=Decimal("12.55")),
+                InterestPeriod(okres=2, oprocentowanie=Decimal("5.55")),
+            ],
+            data_wykupu=datetime.date(2033, 8, 1),
         ),
         Bond(
-            emisja="ASDF1234",
-            dostepnych=999,
-            zablokowanych=998,
-            nominalna=Money(amount=Decimal("456789.99"), currency="PLN"),
-            aktualna=Money(amount=Decimal("987654.60"), currency="PLN"),
-            data_wykupu=datetime.date(3011, 1, 1),
-            okresy=[InterestPeriod(okres=1, oprocentowanie=Decimal("7.5"))],
+            emisja="ASDF5555",
+            dostepnych=666,
+            zablokowanych=0,
+            nominalna=Money(amount=Decimal("555555.55"), currency="PLN"),
+            aktualna=Money(amount=Decimal("99999.99"), currency="PLN"),
+            okresy=[
+                InterestPeriod(okres=1, oprocentowanie=Decimal("7.5")),
+                InterestPeriod(okres=2, oprocentowanie=Decimal("69")),
+                InterestPeriod(okres=3, oprocentowanie=Decimal("6.05")),
+            ],
+            data_wykupu=datetime.date(2043, 10, 25),
         ),
     ]
 
 
 def test_available_bonds():
     bs = BeautifulSoup(
-        r"""<tbody id="dostepneEmisje:j_idt138_data"
-    class="ui-datatable-data ui-widget-content">
-    <tr data-ri="0" class="ui-widget-content ui-datatable-even" role="row">
-        <td role="gridcell" style="white-space: normal;"><span
-                id="dostepneEmisje:j_idt138:0:nazwaSkrocona"
-                style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">6-letnie:
-                ROS0529</span>
-            <script id="dostepneEmisje:j_idt138:0:j_idt140_s"
-                type="text/javascript">$(function () { PrimeFaces.cw("ExtTooltip", "widget_dostepneEmisje_j_idt138_0_j_idt140", { id: "dostepneEmisje:j_idt138:0:j_idt140", global: false, shared: false, autoShow: false, forTarget: "dostepneEmisje:j_idt138:0:nazwaSkrocona", content: { text: "RODZINNYCH SZEŚCIOLETNICH OSZCZĘDNOŚCIOWYCH OBLIGACJI SKARBOWYCH" }, style: { widget: true }, show: { event: 'mouseenter', delay: 0, effect: function () { $(this).fadeIn(500); } }, hide: { event: 'mouseleave', delay: 0, fixed: false, effect: function () { $(this).fadeOut(500); } }, position: { at: 'bottom right', my: 'top left', adjust: { x: 0, y: 0 }, viewport: $(window) } }); });</script>
-        </td>
-        <td role="gridcell" style="white-space: normal; text-align: center;"><span
-                style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">od
-                2023-05-01 <br /> do 2023-05-31</span></td>
-        <td role="gridcell" style="white-space: normal;"><span
-                style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">7,20%</span>
-        </td>
-        <td role="gridcell" style="white-space: normal; text-align: center;"><a
-                href="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROS0529"
-                style="font-size: 0.875em;" target="_blank">pokaż</a></td>
-        <td role="gridcell" style="text-align: center; font-size: 0.875em;"><a
-                id="dostepneEmisje:j_idt138:0:wybierz" href="#"
-                class="ui-commandlink ui-widget"
-                onclick="PrimeFaces.ab({s:&quot;dostepneEmisje:j_idt138:0:wybierz&quot;,u:&quot;dostepneEmisje&quot;});return false;">wybierz</a>
-        </td>
-    </tr>
-    <tr data-ri="1" class="ui-widget-content ui-datatable-odd" role="row">
-        <td role="gridcell" style="white-space: normal;"><span
-                id="dostepneEmisje:j_idt138:1:nazwaSkrocona"
-                style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">12-letnie:
-                ROD0535</span>
-            <script id="dostepneEmisje:j_idt138:1:j_idt140_s"
-                type="text/javascript">$(function () { PrimeFaces.cw("ExtTooltip", "widget_dostepneEmisje_j_idt138_1_j_idt140", { id: "dostepneEmisje:j_idt138:1:j_idt140", global: false, shared: false, autoShow: false, forTarget: "dostepneEmisje:j_idt138:1:nazwaSkrocona", content: { text: "RODZINNYCH DWUNASTOLETNICH OSZCZĘDNOŚCIOWYCH OBLIGACJI SKARBOWYCH" }, style: { widget: true }, show: { event: 'mouseenter', delay: 0, effect: function () { $(this).fadeIn(500); } }, hide: { event: 'mouseleave', delay: 0, fixed: false, effect: function () { $(this).fadeOut(500); } }, position: { at: 'bottom right', my: 'top left', adjust: { x: 0, y: 0 }, viewport: $(window) } }); });</script>
-        </td>
-        <td role="gridcell" style="white-space: normal; text-align: center;"><span
-                style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">od
-                2023-05-01 <br /> do 2023-05-31</span></td>
-        <td role="gridcell" style="white-space: normal;"><span
-                style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">7,50%</span>
-        </td>
-        <td role="gridcell" style="white-space: normal; text-align: center;"><a
-                href="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROD0535"
-                style="font-size: 0.875em;" target="_blank">pokaż</a></td>
-        <td role="gridcell" style="text-align: center; font-size: 0.875em;"><a
-                id="dostepneEmisje:j_idt138:1:wybierz" href="#"
-                class="ui-commandlink ui-widget"
-                onclick="PrimeFaces.ab({s:&quot;dostepneEmisje:j_idt138:1:wybierz&quot;,u:&quot;dostepneEmisje&quot;});return false;">wybierz</a>
-        </td>
-    </tr>
-</tbody>""",
+        r"""<tbody id="dostepneEmisje:j_idt190_data" class="ui-datatable-data ui-widget-content"><tr data-ri="0" class="ui-widget-content ui-datatable-even"><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:0:nazwaSkrocona" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">6-letnie: ROS0431</span><script id="dostepneEmisje:j_idt190:0:j_idt192_s" type="text/javascript">$(function(){PrimeFaces.cw("ExtTooltip","widget_dostepneEmisje_j_idt190_0_j_idt192",{id:"dostepneEmisje:j_idt190:0:j_idt192",global:false,shared:false,autoShow:false,forTarget:"dostepneEmisje:j_idt190:0:nazwaSkrocona",content: {text: "RODZINNYCH SZEŚCIOLETNICH OSZCZĘDNOŚCIOWYCH OBLIGACJI SKARBOWYCH"},style: {widget:true},show:{event:'mouseenter',delay:0,effect:function(){$(this).fadeIn(500);}},hide:{event:'mouseleave',delay:0,fixed:false,effect:function(){$(this).fadeOut(500);}},position: {at:'bottom right',my:'top left',adjust:{x:0,y:0},viewport:$(window)}});});</script></td><td role="gridcell" style="white-space: normal; text-align: center;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">od 2025-04-01 <br/> do 2025-04-30</span></td><td role="gridcell" style="white-space: normal;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">6,50%</span></td><td role="gridcell" style="white-space: normal; text-align: center;"><a href="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROS0431" style="font-size: 0.875em;" target="_blank">pokaż</a></td><td role="gridcell" style="text-align: center; font-size: 0.875em;"><a id="dostepneEmisje:j_idt190:0:wybierz" href="#" class="ui-commandlink ui-widget" onclick="PrimeFaces.ab({s:&quot;dostepneEmisje:j_idt190:0:wybierz&quot;,f:&quot;dostepneEmisje&quot;,u:&quot;dostepneEmisje&quot;});return false;">wybierz</a><script id="dostepneEmisje:j_idt190:0:wybierz_s" type="text/javascript">$(function(){PrimeFaces.cw("CommandLink","widget_dostepneEmisje_j_idt190_0_wybierz",{id:"dostepneEmisje:j_idt190:0:wybierz"});});</script></td></tr><tr data-ri="1" class="ui-widget-content ui-datatable-odd"><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:1:nazwaSkrocona" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">12-letnie: ROD0437</span><script id="dostepneEmisje:j_idt190:1:j_idt192_s" type="text/javascript">$(function(){PrimeFaces.cw("ExtTooltip","widget_dostepneEmisje_j_idt190_1_j_idt192",{id:"dostepneEmisje:j_idt190:1:j_idt192",global:false,shared:false,autoShow:false,forTarget:"dostepneEmisje:j_idt190:1:nazwaSkrocona",content: {text: "RODZINNYCH DWUNASTOLETNICH OSZCZĘDNOŚCIOWYCH OBLIGACJI SKARBOWYCH"},style: {widget:true},show:{event:'mouseenter',delay:0,effect:function(){$(this).fadeIn(500);}},hide:{event:'mouseleave',delay:0,fixed:false,effect:function(){$(this).fadeOut(500);}},position: {at:'bottom right',my:'top left',adjust:{x:0,y:0},viewport:$(window)}});});</script></td><td role="gridcell" style="white-space: normal; text-align: center;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">od 2025-04-01 <br/> do 2025-04-30</span></td><td role="gridcell" style="white-space: normal;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">6,80%</span></td><td role="gridcell" style="white-space: normal; text-align: center;"><a href="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROD0437" style="font-size: 0.875em;" target="_blank">pokaż</a></td><td role="gridcell" style="text-align: center; font-size: 0.875em;"><a id="dostepneEmisje:j_idt190:1:wybierz" href="#" class="ui-commandlink ui-widget" onclick="PrimeFaces.ab({s:&quot;dostepneEmisje:j_idt190:1:wybierz&quot;,f:&quot;dostepneEmisje&quot;,u:&quot;dostepneEmisje&quot;});return false;">wybierz</a><script id="dostepneEmisje:j_idt190:1:wybierz_s" type="text/javascript">$(function(){PrimeFaces.cw("CommandLink","widget_dostepneEmisje_j_idt190_1_wybierz",{id:"dostepneEmisje:j_idt190:1:wybierz"});});</script></td></tr></tbody>""",
         features="html.parser",
     )
     extracted_bonds = extract_available_bonds(bs, path="/foo.html")
+    print(extracted_bonds)
     assert extracted_bonds == [
         AvailableBond(
+            emitent="Skarb Państwa",
             rodzaj="6-letnie",
-            emisja="ROS0529",
-            okres_sprzedazy_od=datetime.date(2023, 5, 1),
-            okres_sprzedazy_do=datetime.date(2023, 5, 31),
-            oprocentowanie=Decimal("7.20"),
-            list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROS0529",
-            wybierz={"s": "dostepneEmisje:j_idt138:0:wybierz", "u": "dostepneEmisje"},
+            emisja="ROS0431",
+            okres_sprzedazy_od=datetime.date(2025, 4, 1),
+            okres_sprzedazy_do=datetime.date(2025, 4, 30),
+            oprocentowanie=Decimal("6.50"),
+            list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROS0431",
+            wybierz={"s": "dostepneEmisje:j_idt190:0:wybierz", "u": "dostepneEmisje"},
             path="/foo.html",
         ),
         AvailableBond(
+            emitent="Skarb Państwa",
             rodzaj="12-letnie",
-            emisja="ROD0535",
-            okres_sprzedazy_od=datetime.date(2023, 5, 1),
-            okres_sprzedazy_do=datetime.date(2023, 5, 31),
-            oprocentowanie=Decimal("7.50"),
-            list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROD0535",
-            wybierz={"s": "dostepneEmisje:j_idt138:1:wybierz", "u": "dostepneEmisje"},
+            emisja="ROD0437",
+            okres_sprzedazy_od=datetime.date(2025, 4, 1),
+            okres_sprzedazy_do=datetime.date(2025, 4, 30),
+            oprocentowanie=Decimal("6.80"),
+            list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROD0437",
+            wybierz={"s": "dostepneEmisje:j_idt190:1:wybierz", "u": "dostepneEmisje"},
             path="/foo.html",
         ),
     ]
+
     assert extracted_bonds[0].dlugosc == 6 * 12
     assert extracted_bonds[1].dlugosc == 12 * 12
 
 
+def test_available_bonds_skarb_panstwa():
+    bs = BeautifulSoup(
+        r"""<tbody id="dostepneEmisje:j_idt190_data" class="ui-datatable-data ui-widget-content"><tr data-ri="0" class="ui-widget-content ui-datatable-even"><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:0:nazwaEmitenta" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">Skarb Państwa</span></td><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:0:nazwaSkrocona" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">3-miesięczne: OTS0725</span><script id="dostepneEmisje:j_idt190:0:j_idt193_s" type="text/javascript">$(function(){PrimeFaces.cw("ExtTooltip","widget_dostepneEmisje_j_idt190_0_j_idt193",{id:"dostepneEmisje:j_idt190:0:j_idt193",global:false,shared:false,autoShow:false,forTarget:"dostepneEmisje:j_idt190:0:nazwaSkrocona",content: {text: "TRZYMIESIĘCZNYCH OSZCZĘDNOŚCIOWYCH OBLIGACJI SKARBOWYCH O OPROCENTOWANIU STAŁYM"},style: {widget:true},show:{event:'mouseenter',delay:0,effect:function(){$(this).fadeIn(500);}},hide:{event:'mouseleave',delay:0,fixed:false,effect:function(){$(this).fadeOut(500);}},position: {at:'bottom right',my:'top left',adjust:{x:0,y:0},viewport:$(window)}});});</script></td><td role="gridcell" style="white-space: normal; text-align: center;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">od 2025-04-01 <br/> do 2025-04-30</span></td><td role="gridcell" style="white-space: normal;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">3,00%</span></td><td role="gridcell" style="white-space: normal; text-align: center;"><a href="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=OTS0725" style="font-size: 0.875em; " target="_blank">pokaż</a></td><td role="gridcell" style="text-align: center; font-size: 0.875em; "><a id="dostepneEmisje:j_idt190:0:wybierz" href="#" class="ui-commandlink ui-widget" onclick="PrimeFaces.ab({s:&quot;dostepneEmisje:j_idt190:0:wybierz&quot;,f:&quot;dostepneEmisje&quot;,u:&quot;dostepneEmisje&quot;});return false;">wybierz</a><script id="dostepneEmisje:j_idt190:0:wybierz_s" type="text/javascript">$(function(){PrimeFaces.cw("CommandLink","widget_dostepneEmisje_j_idt190_0_wybierz",{id:"dostepneEmisje:j_idt190:0:wybierz"});});</script></td></tr><tr data-ri="1" class="ui-widget-content ui-datatable-odd"><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:1:nazwaEmitenta" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">Skarb Państwa</span></td><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:1:nazwaSkrocona" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">roczne: ROR0426</span><script id="dostepneEmisje:j_idt190:1:j_idt193_s" type="text/javascript">$(function(){PrimeFaces.cw("ExtTooltip","widget_dostepneEmisje_j_idt190_1_j_idt193",{id:"dostepneEmisje:j_idt190:1:j_idt193",global:false,shared:false,autoShow:false,forTarget:"dostepneEmisje:j_idt190:1:nazwaSkrocona",content: {text: "ROCZNYCH OSZCZĘDNOŚCIOWYCH OBLIGACJI SKARBOWYCH O ZMIENNEJ STOPIE PROCENTOWEJ"},style: {widget:true},show:{event:'mouseenter',delay:0,effect:function(){$(this).fadeIn(500);}},hide:{event:'mouseleave',delay:0,fixed:false,effect:function(){$(this).fadeOut(500);}},position: {at:'bottom right',my:'top left',adjust:{x:0,y:0},viewport:$(window)}});});</script></td><td role="gridcell" style="white-space: normal; text-align: center;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">od 2025-04-01 <br/> do 2025-04-30</span></td><td role="gridcell" style="white-space: normal;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">5,75%</span></td><td role="gridcell" style="white-space: normal; text-align: center;"><a href="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROR0426" style="font-size: 0.875em; " target="_blank">pokaż</a></td><td role="gridcell" style="text-align: center; font-size: 0.875em; "><a id="dostepneEmisje:j_idt190:1:wybierz" href="#" class="ui-commandlink ui-widget" onclick="PrimeFaces.ab({s:&quot;dostepneEmisje:j_idt190:1:wybierz&quot;,f:&quot;dostepneEmisje&quot;,u:&quot;dostepneEmisje&quot;});return false;">wybierz</a><script id="dostepneEmisje:j_idt190:1:wybierz_s" type="text/javascript">$(function(){PrimeFaces.cw("CommandLink","widget_dostepneEmisje_j_idt190_1_wybierz",{id:"dostepneEmisje:j_idt190:1:wybierz"});});</script></td></tr><tr data-ri="2" class="ui-widget-content ui-datatable-even"><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:2:nazwaEmitenta" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">Skarb Państwa</span></td><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:2:nazwaSkrocona" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">2-letnie: DOR0427</span><script id="dostepneEmisje:j_idt190:2:j_idt193_s" type="text/javascript">$(function(){PrimeFaces.cw("ExtTooltip","widget_dostepneEmisje_j_idt190_2_j_idt193",{id:"dostepneEmisje:j_idt190:2:j_idt193",global:false,shared:false,autoShow:false,forTarget:"dostepneEmisje:j_idt190:2:nazwaSkrocona",content: {text: "DWULETNICH OSZCZĘDNOŚCIOWYCH OBLIGACJI SKARBOWYCH O ZMIENNEJ STOPIE PROCENTOWEJ"},style: {widget:true},show:{event:'mouseenter',delay:0,effect:function(){$(this).fadeIn(500);}},hide:{event:'mouseleave',delay:0,fixed:false,effect:function(){$(this).fadeOut(500);}},position: {at:'bottom right',my:'top left',adjust:{x:0,y:0},viewport:$(window)}});});</script></td><td role="gridcell" style="white-space: normal; text-align: center;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">od 2025-04-01 <br/> do 2025-04-30</span></td><td role="gridcell" style="white-space: normal;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">5,90%</span></td><td role="gridcell" style="white-space: normal; text-align: center;"><a href="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=DOR0427" style="font-size: 0.875em; " target="_blank">pokaż</a></td><td role="gridcell" style="text-align: center; font-size: 0.875em; "><a id="dostepneEmisje:j_idt190:2:wybierz" href="#" class="ui-commandlink ui-widget" onclick="PrimeFaces.ab({s:&quot;dostepneEmisje:j_idt190:2:wybierz&quot;,f:&quot;dostepneEmisje&quot;,u:&quot;dostepneEmisje&quot;});return false;">wybierz</a><script id="dostepneEmisje:j_idt190:2:wybierz_s" type="text/javascript">$(function(){PrimeFaces.cw("CommandLink","widget_dostepneEmisje_j_idt190_2_wybierz",{id:"dostepneEmisje:j_idt190:2:wybierz"});});</script></td></tr><tr data-ri="3" class="ui-widget-content ui-datatable-odd"><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:3:nazwaEmitenta" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">Skarb Państwa</span></td><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:3:nazwaSkrocona" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">3-letnie: TOS0428</span><script id="dostepneEmisje:j_idt190:3:j_idt193_s" type="text/javascript">$(function(){PrimeFaces.cw("ExtTooltip","widget_dostepneEmisje_j_idt190_3_j_idt193",{id:"dostepneEmisje:j_idt190:3:j_idt193",global:false,shared:false,autoShow:false,forTarget:"dostepneEmisje:j_idt190:3:nazwaSkrocona",content: {text: "TRZYLETNICH OSZCZĘDNOŚCIOWYCH OBLIGACJI SKARBOWYCH O OPROCENTOWANIU STAŁYM"},style: {widget:true},show:{event:'mouseenter',delay:0,effect:function(){$(this).fadeIn(500);}},hide:{event:'mouseleave',delay:0,fixed:false,effect:function(){$(this).fadeOut(500);}},position: {at:'bottom right',my:'top left',adjust:{x:0,y:0},viewport:$(window)}});});</script></td><td role="gridcell" style="white-space: normal; text-align: center;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">od 2025-04-01 <br/> do 2025-04-30</span></td><td role="gridcell" style="white-space: normal;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">5,95%</span></td><td role="gridcell" style="white-space: normal; text-align: center;"><a href="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=TOS0428" style="font-size: 0.875em; " target="_blank">pokaż</a></td><td role="gridcell" style="text-align: center; font-size: 0.875em; "><a id="dostepneEmisje:j_idt190:3:wybierz" href="#" class="ui-commandlink ui-widget" onclick="PrimeFaces.ab({s:&quot;dostepneEmisje:j_idt190:3:wybierz&quot;,f:&quot;dostepneEmisje&quot;,u:&quot;dostepneEmisje&quot;});return false;">wybierz</a><script id="dostepneEmisje:j_idt190:3:wybierz_s" type="text/javascript">$(function(){PrimeFaces.cw("CommandLink","widget_dostepneEmisje_j_idt190_3_wybierz",{id:"dostepneEmisje:j_idt190:3:wybierz"});});</script></td></tr><tr data-ri="4" class="ui-widget-content ui-datatable-even"><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:4:nazwaEmitenta" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">Skarb Państwa</span></td><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:4:nazwaSkrocona" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">4-letnie: COI0429</span><script id="dostepneEmisje:j_idt190:4:j_idt193_s" type="text/javascript">$(function(){PrimeFaces.cw("ExtTooltip","widget_dostepneEmisje_j_idt190_4_j_idt193",{id:"dostepneEmisje:j_idt190:4:j_idt193",global:false,shared:false,autoShow:false,forTarget:"dostepneEmisje:j_idt190:4:nazwaSkrocona",content: {text: "CZTEROLETNICH INDEKSOWANYCH OSZCZĘDNOŚCIOWYCH OBLIGACJI SKARBOWYCH"},style: {widget:true},show:{event:'mouseenter',delay:0,effect:function(){$(this).fadeIn(500);}},hide:{event:'mouseleave',delay:0,fixed:false,effect:function(){$(this).fadeOut(500);}},position: {at:'bottom right',my:'top left',adjust:{x:0,y:0},viewport:$(window)}});});</script></td><td role="gridcell" style="white-space: normal; text-align: center;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">od 2025-04-01 <br/> do 2025-04-30</span></td><td role="gridcell" style="white-space: normal;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">6,30%</span></td><td role="gridcell" style="white-space: normal; text-align: center;"><a href="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=COI0429" style="font-size: 0.875em; " target="_blank">pokaż</a></td><td role="gridcell" style="text-align: center; font-size: 0.875em; "><a id="dostepneEmisje:j_idt190:4:wybierz" href="#" class="ui-commandlink ui-widget" onclick="PrimeFaces.ab({s:&quot;dostepneEmisje:j_idt190:4:wybierz&quot;,f:&quot;dostepneEmisje&quot;,u:&quot;dostepneEmisje&quot;});return false;">wybierz</a><script id="dostepneEmisje:j_idt190:4:wybierz_s" type="text/javascript">$(function(){PrimeFaces.cw("CommandLink","widget_dostepneEmisje_j_idt190_4_wybierz",{id:"dostepneEmisje:j_idt190:4:wybierz"});});</script></td></tr><tr data-ri="5" class="ui-widget-content ui-datatable-odd"><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:5:nazwaEmitenta" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">Skarb Państwa</span></td><td role="gridcell" style="white-space: normal;"><span id="dostepneEmisje:j_idt190:5:nazwaSkrocona" style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block;">10-letnie: EDO0435</span><script id="dostepneEmisje:j_idt190:5:j_idt193_s" type="text/javascript">$(function(){PrimeFaces.cw("ExtTooltip","widget_dostepneEmisje_j_idt190_5_j_idt193",{id:"dostepneEmisje:j_idt190:5:j_idt193",global:false,shared:false,autoShow:false,forTarget:"dostepneEmisje:j_idt190:5:nazwaSkrocona",content: {text: "EMERYTALNYCH DZIESIĘCIOLETNICH OSZCZĘDNOŚCIOWYCH OBLIGACJI SKARBOWYCH"},style: {widget:true},show:{event:'mouseenter',delay:0,effect:function(){$(this).fadeIn(500);}},hide:{event:'mouseleave',delay:0,fixed:false,effect:function(){$(this).fadeOut(500);}},position: {at:'bottom right',my:'top left',adjust:{x:0,y:0},viewport:$(window)}});});</script></td><td role="gridcell" style="white-space: normal; text-align: center;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">od 2025-04-01 <br/> do 2025-04-30</span></td><td role="gridcell" style="white-space: normal;"><span style="font-size: 0.875em; font-style: normal; text-align: center; width: 100%; display: inline-block; white-space: nowrap;">6,55%</span></td><td role="gridcell" style="white-space: normal; text-align: center;"><a href="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=EDO0435" style="font-size: 0.875em; " target="_blank">pokaż</a></td><td role="gridcell" style="text-align: center; font-size: 0.875em; "><a id="dostepneEmisje:j_idt190:5:wybierz" href="#" class="ui-commandlink ui-widget" onclick="PrimeFaces.ab({s:&quot;dostepneEmisje:j_idt190:5:wybierz&quot;,f:&quot;dostepneEmisje&quot;,u:&quot;dostepneEmisje&quot;});return false;">wybierz</a><script id="dostepneEmisje:j_idt190:5:wybierz_s" type="text/javascript">$(function(){PrimeFaces.cw("CommandLink","widget_dostepneEmisje_j_idt190_5_wybierz",{id:"dostepneEmisje:j_idt190:5:wybierz"});});</script></td></tr>""",
+        features="html.parser",
+    )
+    extracted_bonds = extract_available_bonds(bs, path="/foo.html")
+    print(extracted_bonds)
+    assert extracted_bonds == [
+        AvailableBond(
+            emitent="Skarb Państwa",
+            rodzaj="3-miesięczne",
+            emisja="OTS0725",
+            okres_sprzedazy_od=datetime.date(2025, 4, 1),
+            okres_sprzedazy_do=datetime.date(2025, 4, 30),
+            oprocentowanie=Decimal("3.00"),
+            list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=OTS0725",
+            wybierz={"s": "dostepneEmisje:j_idt190:0:wybierz", "u": "dostepneEmisje"},
+            path="/foo.html",
+        ),
+        AvailableBond(
+            emitent="Skarb Państwa",
+            rodzaj="roczne",
+            emisja="ROR0426",
+            okres_sprzedazy_od=datetime.date(2025, 4, 1),
+            okres_sprzedazy_do=datetime.date(2025, 4, 30),
+            oprocentowanie=Decimal("5.75"),
+            list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=ROR0426",
+            wybierz={"s": "dostepneEmisje:j_idt190:1:wybierz", "u": "dostepneEmisje"},
+            path="/foo.html",
+        ),
+        AvailableBond(
+            emitent="Skarb Państwa",
+            rodzaj="2-letnie",
+            emisja="DOR0427",
+            okres_sprzedazy_od=datetime.date(2025, 4, 1),
+            okres_sprzedazy_do=datetime.date(2025, 4, 30),
+            oprocentowanie=Decimal("5.90"),
+            list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=DOR0427",
+            wybierz={"s": "dostepneEmisje:j_idt190:2:wybierz", "u": "dostepneEmisje"},
+            path="/foo.html",
+        ),
+        AvailableBond(
+            emitent="Skarb Państwa",
+            rodzaj="3-letnie",
+            emisja="TOS0428",
+            okres_sprzedazy_od=datetime.date(2025, 4, 1),
+            okres_sprzedazy_do=datetime.date(2025, 4, 30),
+            oprocentowanie=Decimal("5.95"),
+            list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=TOS0428",
+            wybierz={"s": "dostepneEmisje:j_idt190:3:wybierz", "u": "dostepneEmisje"},
+            path="/foo.html",
+        ),
+        AvailableBond(
+            emitent="Skarb Państwa",
+            rodzaj="4-letnie",
+            emisja="COI0429",
+            okres_sprzedazy_od=datetime.date(2025, 4, 1),
+            okres_sprzedazy_do=datetime.date(2025, 4, 30),
+            oprocentowanie=Decimal("6.30"),
+            list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=COI0429",
+            wybierz={"s": "dostepneEmisje:j_idt190:4:wybierz", "u": "dostepneEmisje"},
+            path="/foo.html",
+        ),
+        AvailableBond(
+            emitent="Skarb Państwa",
+            rodzaj="10-letnie",
+            emisja="EDO0435",
+            okres_sprzedazy_od=datetime.date(2025, 4, 1),
+            okres_sprzedazy_do=datetime.date(2025, 4, 30),
+            oprocentowanie=Decimal("6.55"),
+            list_emisyjny="http://www.obligacjeskarbowe.pl/listy-emisyjne/?id=EDO0435",
+            wybierz={"s": "dostepneEmisje:j_idt190:5:wybierz", "u": "dostepneEmisje"},
+            path="/foo.html",
+        ),
+    ]
+    assert extracted_bonds[0].dlugosc == 3
+    assert extracted_bonds[1].dlugosc == 12
+    assert extracted_bonds[2].dlugosc == 24
+    assert extracted_bonds[3].dlugosc == 36
+    assert extracted_bonds[4].dlugosc == 48
+    assert extracted_bonds[5].dlugosc == 120
+
+
 def test_parse_redirect():
-    commands = list(parse_xml_response(
-        r"""<?xml version='1.0' encoding='UTF-8'?>
+    commands = list(
+        parse_xml_response(
+            r"""<?xml version='1.0' encoding='UTF-8'?>
 <partial-response id="j_id1"><redirect url="/zakupObligacji500Plus.html?execution=e2s2"></redirect></partial-response>"""
-    ))
+        )
+    )
     assert commands == [Redirect(url="/zakupObligacji500Plus.html?execution=e2s2")]
 
+
 def test_parse_partial_update_of_view_state():
-    commands = list(parse_xml_response('<?xml version=\'1.0\' encoding=\'UTF-8\'?>\n<partial-response id="j_id1"><changes><update id="j_id1:javax.faces.ViewState:0"><![CDATA[e1s1]]></update></changes></partial-response>'))
-    assert commands == [PartialResponse(id="j_id1", updates={'j_id1:javax.faces.ViewState:0': 'e1s1'})]
+    commands = list(
+        parse_xml_response(
+            "<?xml version='1.0' encoding='UTF-8'?>\n<partial-response id=\"j_id1\"><changes><update id=\"j_id1:javax.faces.ViewState:0\"><![CDATA[e1s1]]></update></changes></partial-response>"
+        )
+    )
+    assert commands == [
+        PartialResponse(id="j_id1", updates={"j_id1:javax.faces.ViewState:0": "e1s1"})
+    ]
 
 
 def test_extract_form_action():
@@ -507,17 +520,40 @@ def test_parse_history():
         ),
     ]
 
+
 def test_html_to_string():
-    assert html_to_string('foo</br>bar') == 'foo\nbar'
-    assert html_to_string('foo<br/>bar') == 'foo\nbar'
-    assert html_to_string('foo<br>bar') == 'foo\nbar'
-    assert html_to_string('foo<br />bar') == 'foo\nbar'
-    assert html_to_string('foo<br/>bar</br>baz</br></br>') == 'foo\nbar\nbaz'
+    assert html_to_string("foo</br>bar") == "foo\nbar"
+    assert html_to_string("foo<br/>bar") == "foo\nbar"
+    assert html_to_string("foo<br>bar") == "foo\nbar"
+    assert html_to_string("foo<br />bar") == "foo\nbar"
+    assert html_to_string("foo<br/>bar</br>baz</br></br>") == "foo\nbar\nbaz"
+
 
 def test_parse_tooltip():
-    assert parse_tooltip('okres 1 oprocentowanie 7.5%') == [InterestPeriod(1, Decimal('7.5'))]
-    assert parse_tooltip('okres 1 oprocentowanie 7.5%\n') == [InterestPeriod(1, Decimal('7.5'))]
-    assert parse_tooltip('okres 1 oprocentowanie 7.5%\nokres 2 oprocentowanie 15.0%\n') == [InterestPeriod(1, Decimal('7.5')), InterestPeriod(2, Decimal('15.0'))]
-    assert parse_tooltip('okres 1 oprocentowanie 7.5%\nokres 2 oprocentowanie 15.0%') == [InterestPeriod(1, Decimal('7.5')), InterestPeriod(2, Decimal('15.0'))]
-    assert parse_tooltip('okres 1 oprocentowanie 7.5%\nokres 2 oprocentowanie 15.0%\n\n') == [InterestPeriod(1, Decimal('7.5')), InterestPeriod(2, Decimal('15.0'))]
+    assert parse_tooltip("okres 1 oprocentowanie 7.5%") == [
+        InterestPeriod(1, Decimal("7.5"))
+    ]
+    assert parse_tooltip("okres 1 oprocentowanie 7.5%\n") == [
+        InterestPeriod(1, Decimal("7.5"))
+    ]
+    assert parse_tooltip(
+        "okres 1 oprocentowanie 7.5%\nokres 2 oprocentowanie 15.0%\n"
+    ) == [InterestPeriod(1, Decimal("7.5")), InterestPeriod(2, Decimal("15.0"))]
+    assert parse_tooltip(
+        "okres 1 oprocentowanie 7.5%\nokres 2 oprocentowanie 15.0%"
+    ) == [InterestPeriod(1, Decimal("7.5")), InterestPeriod(2, Decimal("15.0"))]
+    assert parse_tooltip(
+        "okres 1 oprocentowanie 7.5%\nokres 2 oprocentowanie 15.0%\n\n"
+    ) == [InterestPeriod(1, Decimal("7.5")), InterestPeriod(2, Decimal("15.0"))]
     # assert parse_tooltip('')
+
+
+def test_parse_saldo_and_wartosc():
+    bs = BeautifulSoup(
+        r"""<span class="formlabel-230 formlabel-base">Saldo środków pieniężnych</span><span class="formfield-base" style="font-weight: bold;">1 000 000,00 PLN</span><span class="formfield-base">Wartość nominalna dotychczas zakupionych obligacji za środki przyznane w ramach programów wsparcia rodziny wynosi: 69420.99</span>""",
+        features="html.parser",
+    )
+    assert emisje_parse_saldo_srodkow_pienieznych(bs), Money(
+        amount=Decimal("1000000.00"), currency="PLN"
+    )
+    assert emisje_parse_wartosc_nominalna_800plus(bs), Decimal("69420.99")

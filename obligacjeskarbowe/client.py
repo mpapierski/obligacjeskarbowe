@@ -1,12 +1,15 @@
 from collections import OrderedDict
+from datetime import date, datetime
 import logging
 import operator
+import re
 import time
 from bs4 import BeautifulSoup
 import requests
 from obligacjeskarbowe import two_factor
 
 from obligacjeskarbowe.parser import (
+    Bonds,
     PartialResponse,
     Redirect,
     extract_available_bonds,
@@ -17,6 +20,8 @@ from obligacjeskarbowe.parser import (
     extract_form_action_by_id,
     extract_javax_view_state,
     extract_purchase_step_title,
+    emisje_parse_wartosc_nominalna_800plus,
+    emisje_parse_saldo_srodkow_pienieznych,
     parse_history,
     parse_xml_response,
 )
@@ -39,8 +44,6 @@ class ObligacjeSkarbowe:
             }
         )
 
-        self.balance = None
-        self.bonds = None
         self.available_bonds = []
         # A lookup table from readable bond name into the internal identifier.
         self.available_bonds_lookup = OrderedDict()
@@ -63,9 +66,70 @@ class ObligacjeSkarbowe:
         r.raise_for_status()
 
         bs = BeautifulSoup(r.content, features="html.parser")
+        with open("downloads/login.html", "w") as f:
+            f.write(str(bs))
+
         prompt = bs.select('span[id="spanContent"]')[0].text.strip()
 
-        if "Nie rozpoznaliśmy Twojego urządzenia." in prompt:
+        print(f"Login prompt: {prompt!r}")
+
+        prompt_lines = prompt.splitlines()
+
+        if m := re.match(
+            "^Podaj kod jednorazowy dla operacji nr (\d+) z (\d{2})-(\d{2})-(\d{4})$",
+            prompt_lines[0],
+        ):
+            (
+                operacja_nr,
+                dzien,
+                miesiac,
+                rok,
+            ) = m.groups()
+
+            data_kodu = date(
+                int(rok),
+                int(miesiac),
+                int(dzien),
+            )
+
+            print(
+                f"Potwierdzenie danych logowania: Czekanie na kod nr {operacja_nr} z dnia {data_kodu}..."
+            )
+
+            # "Nie rozpoznaliśmy Twojego urządzenia." in prompt or:
+            token_stream = two_factor.wait_for_token(self.topic)
+
+            open_event = next(token_stream)
+
+            if not isinstance(open_event, (two_factor.Open,)):
+                raise RuntimeError("Expected open event but got {open_event!r}")
+
+            self.next_url = extract_form_action_by_id(bs, form_id="j_idt101")
+            print(f"Next URL: {self.next_url!r}")
+            self.view_state = extract_javax_view_state(bs)
+            print(f"View state: {self.view_state!r}")
+
+            print("Waiting for token...")
+
+            token = next(token_stream)
+
+            print(f"Received token {token!r}")
+
+            time.sleep(5)
+
+            r = self.session.post(
+                self.base_url + self.next_url,
+                data={
+                    "j_idt101": "j_idt101",
+                    "j_idt101:uxCode": token.kod,
+                    "j_idt101:j_idt123": "",
+                    "javax.faces.ViewState": self.view_state,
+                },
+            )
+            r.raise_for_status()
+            bs = BeautifulSoup(r.content, features="html.parser")
+
+        elif "Nie rozpoznaliśmy Twojego urządzenia." in prompt:
             token_stream = two_factor.wait_for_token(self.topic)
 
             open_event = next(token_stream)
@@ -107,8 +171,12 @@ class ObligacjeSkarbowe:
             )
             assert bs is not None
 
-        self.balance = extract_balance(bs)
-        self.bonds = extract_bonds(bs)
+        else:
+            raise RuntimeError(
+                f"Unexpected login prompt {prompt!r}. Expected 'Podaj kod jednorazowy dla operacji nr ...'"
+            )
+        with open("downloads/login_outcome.html", "w") as f:
+            f.write(str(bs))
         self.session.cookies.set("obligacje_set", "none")
         log.info("Logged in")
 
@@ -120,30 +188,125 @@ class ObligacjeSkarbowe:
         available_bonds = extract_available_bonds(bs, path)
         self.next_url = extract_form_action_by_id(bs, form_id="dostepneEmisje")
         self.view_state = extract_javax_view_state(bs)
-        return available_bonds
+        return (available_bonds, bs)
 
-    def __bonds(self, path):
+    def __extract_available_bonds(self, path):
         """Extracts list of bonds but also maintains a lookup database."""
-        new_available_bonds = self.__bonds_navigate(path)
+        (new_available_bonds, bs) = self.__bonds_navigate(path)
         self.available_bonds += new_available_bonds
         new_bonds_lookup = OrderedDict(
             [(bond.emisja, bond) for bond in self.available_bonds]
         )
         self.available_bonds_lookup.update(new_bonds_lookup)
         log.info(f"Found {len(new_bonds_lookup)} bonds at {path}")
-        return new_available_bonds
+        return (new_available_bonds, bs)
+
+    def __bonds_800plus(self):
+        (new_available_bonds, bs) = self.__extract_available_bonds(
+            "/zakupObligacji500Plus.html"
+        )
+        saldo = emisje_parse_saldo_srodkow_pienieznych(bs)
+        wartosc_nominalna = emisje_parse_wartosc_nominalna_800plus(bs)
+        return Bonds(
+            saldo=saldo,
+            emisje=new_available_bonds,
+            wartosc_nominalna_800plus=wartosc_nominalna,
+        )
+
+    def __bonds(self):
+        """Returns a list of bonds available for purchase."""
+        (new_available_bonds, bs) = self.__extract_available_bonds(
+            "/zakupObligacji.html"
+        )
+        saldo = emisje_parse_saldo_srodkow_pienieznych(bs)
+        return Bonds(
+            saldo=saldo, emisje=new_available_bonds, wartosc_nominalna_800plus=None
+        )
 
     def list_bonds(self):
         """Lists available bonds"""
-        bonds = []
-        bonds += self.__bonds("/zakupObligacji500Plus.html")
-        bonds += self.__bonds("/zakupObligacji.html")
-        bonds.sort(
+        bonds_800plus = self.__bonds_800plus()
+        assert bonds_800plus.wartosc_nominalna_800plus is not None
+        bonds = self.__bonds()
+
+        assert (
+            bonds_800plus.saldo == bonds.saldo
+        ), f"Saldo does not match {bonds_800plus.saldo} != {bonds.saldo}"
+
+        all_bonds = Bonds(
+            saldo=bonds_800plus.saldo,
+            emisje=bonds.emisje + bonds_800plus.emisje,
+            wartosc_nominalna_800plus=bonds_800plus.wartosc_nominalna_800plus,
+        )
+
+        all_bonds.emisje.sort(
             key=operator.attrgetter(
                 "dlugosc", "okres_sprzedazy_od", "oprocentowanie", "emisja"
             )
         )
-        return bonds
+        return all_bonds
+
+    def list_portfolio(self):
+        all_portfolio = []
+        r = self.session.get(f"{self.base_url}/stanRachunku.html")
+        r.raise_for_status()
+        bs = BeautifulSoup(r.content, features="html.parser")
+
+        self.view_state = extract_javax_view_state(bs)
+
+        first = 20
+        per_page = 20
+
+        while True:
+            portfolio = extract_bonds(bs)
+            if not portfolio:
+                print(f"Done because of empty page {first} {per_page}")
+                break
+            all_portfolio += portfolio
+            r = self.session.post(
+                f"{self.base_url}/stanRachunku.html?execution={self.view_state}",
+                data={
+                    "javax.faces.partial.ajax": "true",
+                    "javax.faces.source": "stanRachunku:j_idt171",
+                    "javax.faces.partial.execute": "stanRachunku:j_idt171",
+                    "javax.faces.partial.render": "stanRachunku:j_idt171",
+                    "stanRachunku:j_idt171": "stanRachunku:j_idt171",
+                    "stanRachunku:j_idt171_pagination": "true",
+                    "stanRachunku:j_idt171_first": f"{first}",
+                    "stanRachunku:j_idt171_rows": f"{per_page}",
+                    "stanRachunku:j_idt171_skipChildren": "true",
+                    "stanRachunku:j_idt171_encodeFeature": "true",
+                    "stanRachunku": "stanRachunku",
+                    # "stanRachunku:j_idt171_rppDD": [
+                    #    "20",
+                    #    "20"
+                    # ] wtf?
+                    "javax.faces.ViewState": self.view_state,
+                },
+            )
+            r.raise_for_status()
+
+            events = parse_xml_response(r.content)
+            for event in events:
+                if isinstance(event, (PartialResponse,)):
+                    for key, value in event.updates.items():
+                        if key == 'stanRachunku:j_idt171':
+                            if value == ' ':
+                                print(f'Done {first} {per_page}')
+                                return all_portfolio
+                            else:
+                                print(f"{first} Partial update {key!r} {value!r}")
+                                element = bs.find('tbody', id='stanRachunku:j_idt171_data')
+                                element.replace_with(BeautifulSoup(f'<tbody id="stanRachunku:j_idt171_data">{value}</tbody>', features="html.parser"))
+                        elif key == "j_id1:javax.faces.ViewState:0":
+                            self.view_state = value
+                        else:
+                            raise RuntimeError(f"Unexpected update field {key!r} {value!r}")
+                else:
+                    raise RuntimeError(f"Unexpected event {event!r} in portfolio list")
+            first += 20
+
+        return all_portfolio
 
     def purchase(self, emisja, amount):
         """Purchase a bond.
@@ -291,19 +454,29 @@ class ObligacjeSkarbowe:
             "javax.faces.partial.execute": "@all",
             "javax.faces.partial.render": u,
             s: s,
-            u: u,
             "javax.faces.ViewState": self.view_state,
         }
 
+        if u is not None:
+            data[u] = u
+
         data.update(extra_javax_kwargs)
 
-        print(f'{data!r}')
+        print(f"POST data {data!r}")
 
-        r = self.session.post(self.base_url + self.next_url, data=data)
+        r = self.session.post(
+            self.base_url + self.next_url,
+            data=data,
+        )
         r.raise_for_status()
+        print(f"Response headers {r.headers!r}")
 
         # Handle weird XML document with <redirect url=""> instead of 3xx response
         events = parse_xml_response(r.content)
+
+        with open("downloads/parse_xml_response.html", "w") as f:
+            f.write(str(r.content))
+
         for event in events:
             print(f"Partial response event {event!r}")
             if isinstance(event, (Redirect,)):
@@ -320,10 +493,17 @@ class ObligacjeSkarbowe:
                 for key, value in event.updates.items():
                     if key == "j_id1:javax.faces.ViewState:0":
                         new_view_state = value
+                    elif key == "j_idt100":
+                        continue
+                    elif key == "j_idt101":
+                        continue
                     else:
-                        raise RuntimeError(f"Unexpected update field {event!r}")
+                        with open("downloads/partial_update.html", "w") as f:
+                            f.write(str(r.content))
+                        raise RuntimeError(f"Unexpected update field {key!r} {value!r}")
                 self.view_state = new_view_state
-
+            else:
+                raise RuntimeError(f"Unexpected event {event!r}")
         # if redirect_url is None:
         #     print(f'Received partial update? {r.content!r}... Skipping')
         # else:

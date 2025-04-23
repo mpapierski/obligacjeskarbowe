@@ -61,6 +61,18 @@ class Bond:
     data_wykupu: date
 
 
+@dataclass
+class Bonds:
+    """Zakupione obligacje."""
+
+    # Saldo środków pieniężnych
+    saldo: Money
+    # Dostępne emisje obligacji
+    emisje: List[Bond]
+    # Wartość nominalna dotychczas zakupionych obligacji za środki przyznane w ramach programów wsparcia rodziny wynosi: XYZ
+    wartosc_nominalna_800plus: Money
+
+
 def parse_tooltip(text):
     """This works well for ROD/RO"""
     results = []
@@ -68,14 +80,14 @@ def parse_tooltip(text):
         line = line.strip()
         if not line:
             continue
-        if m := re.match(r"^okres (\d+) oprocentowanie (\d+\.\d+)%$", line):
+        if m := re.match(r"^okres (\d+) oprocentowanie (\d+(?:\.\d+)?)%$", line):
             (okres, oprocentowanie) = m.groups()
             okres = int(okres)
             oprocentowanie = Decimal(oprocentowanie)
             interest_period = InterestPeriod(okres=okres, oprocentowanie=oprocentowanie)
             results += [interest_period]
         else:
-            raise RuntimeError(f"Unable to parse tooltip {text!r}")
+            raise RuntimeError(f"Unable to parse tooltip {line!r}")
 
     if not results:
         raise RuntimeError(
@@ -137,6 +149,7 @@ def extract_bonds(bs):
 
 @dataclass
 class AvailableBond:
+    emitent: str
     rodzaj: str
     emisja: str
     okres_sprzedazy_od: date
@@ -178,10 +191,10 @@ def parse_oprocentowanie(text):
 
 def parse_wybierz_onclick(text):
     if m := re.match(
-        r'PrimeFaces.ab\(\{s:"(dostepneEmisje:j_idt\d+:\d+:wybierz)",u:"(.+?)"\}\);return false;',
+        r'PrimeFaces.ab\(\{s:"(dostepneEmisje:j_idt\d+:\d+:wybierz)",f:"(.+?)",u:"(.+?)"\}\);return false;',
         text,
     ):
-        (source, render) = m.groups()
+        (source, _f, render) = m.groups()
         return {
             "s": source,
             "u": render,
@@ -193,23 +206,34 @@ def parse_wybierz_onclick(text):
 def extract_available_bonds(bs, path):
     tbody = bs.select('tbody[id^="dostepneEmisje:j_idt"]')  # Match only beggining
 
-    available = []
-    for row in tbody[0].find_all("tr"):
-        tds = row.find_all("td")
-        (rodzaj, emisja) = parse_emisja(tds[0].text)
-        (okres_sprzedazy_od, okres_sprzedazy_do) = parse_okres_sprzedazy(
-            tds[1].text.strip()
-        )
-        oprocentowanie = parse_oprocentowanie(tds[2].text)
-        if tds[3].text != "pokaż":
-            raise RuntimeError(f"Invalid link found {tds[3]})")
-        list_emisyjny = tds[3].find("a").attrs["href"]
+    tbody = tbody[0]
 
-        wybierz_onclick = tds[4].find("a").attrs["onclick"]
+    available = []
+    for row in tbody.find_all("tr"):
+        tds = row.find_all("td")
+
+        emitent = tds[0].text
+        if emitent == "Skarb Państwa":
+            td_idx = 1
+        else:
+            emitent = "Skarb Państwa"
+            td_idx = 0
+
+        (rodzaj, emisja) = parse_emisja(tds[td_idx + 0].text)
+        (okres_sprzedazy_od, okres_sprzedazy_do) = parse_okres_sprzedazy(
+            tds[td_idx + 1].text.strip()
+        )
+        oprocentowanie = parse_oprocentowanie(tds[td_idx + 2].text)
+        if tds[td_idx + 3].text != "pokaż":
+            raise RuntimeError(f"Invalid link found {tds[td_idx + 3]})")
+        list_emisyjny = tds[td_idx + 3].find("a").attrs["href"]
+
+        wybierz_onclick = tds[td_idx + 4].find("a").attrs["onclick"]
         wybierz = parse_wybierz_onclick(wybierz_onclick)
 
         available.append(
             AvailableBond(
+                emitent=emitent,
                 rodzaj=rodzaj,
                 emisja=emisja,
                 okres_sprzedazy_od=okres_sprzedazy_od,
@@ -290,6 +314,29 @@ def parse_tak_nie(text):
         return False
     else:
         raise RuntimeError(f"Expected TAK or NIE but received {text}")
+
+
+def emisje_parse_saldo_srodkow_pienieznych(bs):
+    """Only for zakupObligacji.html"""
+    node = bs.select("span.formfield-base")[0]
+    assert (
+        node.previous_sibling.text == "Saldo środków pieniężnych"
+    ), f"Unexpected label: {node.previous_sibling.text}"
+    return parse_balance(node.text)
+
+
+def emisje_parse_wartosc_nominalna_800plus(bs):
+    """Only for zakupObligacji500Plus.html"""
+    node = bs.select("span.formfield-base")[1]
+    if m := re.match(
+        r"^Wartość nominalna dotychczas zakupionych obligacji za środki przyznane w ramach programów wsparcia rodziny wynosi: (\d+\.\d{2})$",
+        node.text,
+    ):
+        (wartosc,) = m.groups()
+        wartosc = wartosc.replace(",", ".")
+        return Money(Decimal(wartosc), DEFAULT_CURRENCY)
+    else:
+        raise RuntimeError(f"Unexpected value for wartosc nominalna: {node.text!r}")
 
 
 def extract_dane_dyspozycji(bs):

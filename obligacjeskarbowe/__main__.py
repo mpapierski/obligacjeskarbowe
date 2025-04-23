@@ -137,12 +137,13 @@ def portfolio(username, password, ntfy_topic):
     client.login()
 
     try:
-        click.echo(
-            f"Saldo środków pieniężnych: {client.balance.amount:.02f} {client.balance.currency}",
-        )
+        bonds = client.list_portfolio()
+        # click.echo(
+        #     f"Saldo środków pieniężnych: {client.balance.amount:.02f} {client.balance.currency}",
+        # )
 
         click.echo("Obligacje:")
-        click.echo(tabulate_bonds(client.bonds))
+        click.echo(tabulate_bonds(bonds))
 
     finally:
         client.logout()
@@ -173,14 +174,23 @@ def require_balance(username, password, amount, ntfy_topic):
 @cli.command()
 @click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
 @click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
-def bonds(username, password):
+@click.option(
+    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
+)
+def bonds(username, password, ntfy_topic):
     """List all currently available bonds."""
-    client = ObligacjeSkarbowe(username, password)
+    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
     client.login()
     try:
         available_bonds = client.list_bonds()
         click.echo("Zakup - dostępne emisje obligacji")
-        click.echo(tabulate_available_bonds(available_bonds))
+        click.echo(
+            f"Saldo środków pieniężnych: {available_bonds.saldo.amount:.02f} {available_bonds.saldo.currency}"
+        )
+        click.echo(
+            f"Wartość nominalna dotychczas zakupionych obligacji za środki przyznane w ramach programów wsparcia rodziny wynosi: {available_bonds.wartosc_nominalna_800plus.amount:.02f} {available_bonds.wartosc_nominalna_800plus.currency}"
+        )
+        click.echo(tabulate_available_bonds(available_bonds.emisje))
     finally:
         client.logout()
 
