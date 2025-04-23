@@ -250,9 +250,12 @@ def buy(username, password, symbol, amount, dry_run):
 @click.option("--to-date", type=click.DateTime(["%Y-%m-%d"]), default=datetime.now())
 @click.option("--format", type=click.Choice(["csv", "xlsx", "json"]))
 @click.option("--output", type=click.File("w"), default=sys.stdout)
-def history(username, password, from_date, to_date, format, output):
+@click.option(
+    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
+)
+def history(username, password, from_date, to_date, format, output, ntfy_topic):
     """History of dispositions on your account."""
-    client = ObligacjeSkarbowe(username, password)
+    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
     client.login()
     try:
         history = client.history(from_date=from_date, to_date=to_date)
