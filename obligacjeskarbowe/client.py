@@ -1,8 +1,11 @@
 from collections import OrderedDict
-from datetime import date, datetime
+from datetime import date
 import logging
 import operator
+import os
+import pickle
 import re
+import tempfile
 import time
 from bs4 import BeautifulSoup
 import requests
@@ -13,7 +16,6 @@ from obligacjeskarbowe.parser import (
     PartialResponse,
     Redirect,
     extract_available_bonds,
-    extract_balance,
     extract_bonds,
     extract_dane_dyspozycji,
     extract_data_przyjecia_zlecenia,
@@ -31,6 +33,8 @@ log = logging.getLogger()
 
 LOGIN_BATON = "Zaloguj"
 
+SESSION_FILE = "obligacjeskarbowe.pickle"
+
 
 class ObligacjeSkarbowe:
     def __init__(self, username, password, topic):
@@ -43,7 +47,6 @@ class ObligacjeSkarbowe:
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/118.0"
             }
         )
-
         self.available_bonds = []
         # A lookup table from readable bond name into the internal identifier.
         self.available_bonds_lookup = OrderedDict()
@@ -52,6 +55,40 @@ class ObligacjeSkarbowe:
         self.view_state = None
 
         self.topic = topic
+
+    def persist_session(self):
+        """Persists the session to a file."""
+        with open(os.path.join(tempfile.gettempdir(), SESSION_FILE), "wb") as f:
+            pickle.dump((self.session, self.next_url, self.view_state), f)
+
+    def clear_session(self):
+        """Clears the session."""
+        try:
+            os.remove(os.path.join(tempfile.gettempdir(), SESSION_FILE))
+        except FileNotFoundError:
+            pass
+        self.session = requests.Session()
+        self.session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/118.0"
+            }
+        )
+
+    def restore_session(self):
+        """Restores the session from a file."""
+        filename = os.path.join(tempfile.gettempdir(), SESSION_FILE)
+        try:
+            with open(filename, "rb") as f:
+                (session, next_url, view_state) = pickle.load(f)
+                self.session = session
+                self.next_url = next_url
+                self.view_state = view_state
+        except FileNotFoundError:
+            raise RuntimeError("Session file not found")
+        except EOFError:
+            raise RuntimeError("Session file is empty")
+        except Exception as e:
+            raise RuntimeError(f"Failed to restore session {filename}: {e}")
 
     def login(self):
         """Performs a login procedure."""
@@ -405,6 +442,7 @@ class ObligacjeSkarbowe:
 
         # Navigate to appropriate path for a given bond since the order of page visits matters.
         _available_bonds = self.__bonds_navigate(available_bond.path)
+        del _available_bonds
 
         wybierz = available_bond.wybierz
         bs = self.__javax_post(s=wybierz["s"], u=wybierz["u"])

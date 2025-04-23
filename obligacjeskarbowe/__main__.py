@@ -1,7 +1,7 @@
 import tomllib
 from collections import OrderedDict
 import dataclasses
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal
 import logging
 import sys
@@ -137,21 +137,41 @@ def cli():
 @click.option(
     "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
 )
-def portfolio(username, password, ntfy_topic):
+def login(username, password, ntfy_topic):
     client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
     client.login()
+    client.persist_session()
+    click.echo("OK")
 
+
+@cli.command()
+@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
+@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
+@click.option(
+    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
+)
+def logout(username, password, ntfy_topic):
+    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
+    client.logout()
+    client.clear_session()
+    click.echo("OK")
+
+
+@cli.command()
+@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
+@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
+@click.option(
+    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
+)
+def portfolio(username, password, ntfy_topic):
+    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
+    client.restore_session()
     try:
         bonds = client.list_portfolio()
-        # click.echo(
-        #     f"Saldo środków pieniężnych: {client.balance.amount:.02f} {client.balance.currency}",
-        # )
-
         click.echo("Obligacje:")
         click.echo(tabulate_bonds(bonds))
-
     finally:
-        client.logout()
+        client.persist_session()
 
 
 @cli.command()
@@ -164,7 +184,7 @@ def portfolio(username, password, ntfy_topic):
 def require_balance(username, password, amount, ntfy_topic):
     """Checks a balance to be exactly the expected amount. Exits if balance is invalid."""
     client = ObligacjeSkarbowe(username, password, ntfy_topic)
-    client.login()
+    client.restore_session()
     try:
         if client.balance.amount != amount:
             click.echo(
@@ -173,7 +193,7 @@ def require_balance(username, password, amount, ntfy_topic):
             )
             sys.exit(1)
     finally:
-        client.logout()
+        client.persist_session()
 
 
 @cli.command()
@@ -185,7 +205,7 @@ def require_balance(username, password, amount, ntfy_topic):
 def bonds(username, password, ntfy_topic):
     """List all currently available bonds."""
     client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
-    client.login()
+    client.restore_session()
     try:
         available_bonds = client.list_bonds()
         click.echo("Zakup - dostępne emisje obligacji")
@@ -197,7 +217,7 @@ def bonds(username, password, ntfy_topic):
         )
         click.echo(tabulate_available_bonds(available_bonds.emisje))
     finally:
-        client.logout()
+        client.persist_session()
 
 
 @cli.command()
@@ -206,15 +226,18 @@ def bonds(username, password, ntfy_topic):
 @click.option("--symbol", required=True)
 @click.option("--amount", required=True, type=int)
 @click.option("--dry-run", is_flag=True)
-def buy(username, password, symbol, amount, dry_run):
+@click.option(
+    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
+)
+def buy(username, password, symbol, amount, dry_run, ntfy_topic):
     """Performs automatic purchase of a most recent bond i.e. "ROD" buys current RODXY bond."""
-    client = ObligacjeSkarbowe(username, password)
-    client.login()
+    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
+    client.restore_session()
     try:
         expanded_symbol = None
 
         bonds_list = client.list_bonds()
-        for available_bond in bonds_list:
+        for available_bond in bonds_list.emisje:
             if available_bond.emisja.startswith(symbol):
                 click.echo(
                     f"Found a matching bond {available_bond.emisja} with an interest of {available_bond.oprocentowanie:.02f}%"
@@ -241,7 +264,7 @@ def buy(username, password, symbol, amount, dry_run):
             raise
 
     finally:
-        client.logout()
+        client.persist_session()
 
 
 @cli.command()
@@ -261,7 +284,7 @@ def buy(username, password, symbol, amount, dry_run):
 def history(username, password, from_date, to_date, format, output, ntfy_topic):
     """History of dispositions on your account."""
     client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
-    client.login()
+    client.restore_session()
     try:
         history = client.history(from_date=from_date, to_date=to_date)
         if format is None:
@@ -275,7 +298,7 @@ def history(username, password, from_date, to_date, format, output, ntfy_topic):
             exported = dataset.export(format)
             output.write(exported)
     finally:
-        client.logout()
+        client.persist_session()
 
 
 @cli.command()
@@ -297,7 +320,7 @@ def verify_800plus(username, password, ntfy_topic, dry_run, config):
         return
 
     client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
-    client.login()
+    client.restore_session()
     try:
         available_bonds = client.list_bonds()
         click.echo(
@@ -314,7 +337,7 @@ def verify_800plus(username, password, ntfy_topic, dry_run, config):
             f"Kwota wymagana do dokonania zakupu za cały limit: {buy_amount * 100} {DEFAULT_CURRENCY}"
         )
     finally:
-        client.logout()
+        client.persist_session()
 
 
 if __name__ == "__main__":

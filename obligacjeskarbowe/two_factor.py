@@ -27,7 +27,7 @@ def wait_for_token(topic):
     for line in resp.iter_lines():
         json_data = json.loads(line.decode("utf-8"))
         if json_data["event"] == "open":
-            print(f"Notification stream is open...")
+            print("Notification stream is open...")
             yield Open()
 
         elif json_data["event"] == "message":

@@ -4,7 +4,7 @@ import operator
 import re
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Dict, List
+from typing import List
 
 from bs4 import BeautifulSoup
 

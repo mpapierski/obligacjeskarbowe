@@ -1,7 +1,5 @@
 import datetime
 from decimal import Decimal
-import json
-
 from bs4 import BeautifulSoup
 from obligacjeskarbowe.parser import (
     AvailableBond,
