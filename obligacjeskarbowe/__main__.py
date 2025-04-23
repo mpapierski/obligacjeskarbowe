@@ -22,15 +22,21 @@ def display_money(money):
     return f"{money.amount} {money.currency}"
 
 
-def tabulate_bonds(bonds):
+def tabulate_bonds(bonds, expand):
     rows = []
     for bond in bonds:
         d = dataclasses.asdict(bond, dict_factory=OrderedDict)
         d["nominalna"] = display_money(bond.nominalna)
         d["aktualna"] = display_money(bond.aktualna)
         d["okres"] = d["okresy"][-1]["okres"]
-        oprocentowanie = d["okresy"][-1]["oprocentowanie"]
-        d["oprocentowanie"] = f"{oprocentowanie:.02f}%"
+        if expand:
+            d["oprocentowanie"] = "\n".join(
+                f"{item['okres']}: {item['oprocentowanie']:.02f}%"
+                for item in d["okresy"]
+            )
+        else:
+            d["oprocentowanie"] = f'{d["okresy"][-1]["oprocentowanie"]:.02f}%'
+
         del d["okresy"]
         rows.append(d)
 
@@ -163,13 +169,14 @@ def logout(username, password, ntfy_topic):
 @click.option(
     "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
 )
-def portfolio(username, password, ntfy_topic):
+@click.option("--expand", is_flag=True, default=True)
+def portfolio(username, password, ntfy_topic, expand):
     client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
     client.restore_session()
     try:
         bonds = client.list_portfolio()
         click.echo("Obligacje:")
-        click.echo(tabulate_bonds(bonds))
+        click.echo(tabulate_bonds(bonds, expand))
     finally:
         client.persist_session()
 
