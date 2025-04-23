@@ -76,7 +76,7 @@ class ObligacjeSkarbowe:
         prompt_lines = prompt.splitlines()
 
         if m := re.match(
-            "^Podaj kod jednorazowy dla operacji nr (\d+) z (\d{2})-(\d{2})-(\d{4})$",
+            r"^Podaj kod jednorazowy dla operacji nr (\d+) z (\d{2})-(\d{2})-(\d{4})$",
             prompt_lines[0],
         ):
             (
@@ -290,18 +290,27 @@ class ObligacjeSkarbowe:
             for event in events:
                 if isinstance(event, (PartialResponse,)):
                     for key, value in event.updates.items():
-                        if key == 'stanRachunku:j_idt171':
-                            if value == ' ':
-                                print(f'Done {first} {per_page}')
+                        if key == "stanRachunku:j_idt171":
+                            if value == " ":
+                                print(f"Done {first} {per_page}")
                                 return all_portfolio
                             else:
                                 print(f"{first} Partial update {key!r} {value!r}")
-                                element = bs.find('tbody', id='stanRachunku:j_idt171_data')
-                                element.replace_with(BeautifulSoup(f'<tbody id="stanRachunku:j_idt171_data">{value}</tbody>', features="html.parser"))
+                                element = bs.find(
+                                    "tbody", id="stanRachunku:j_idt171_data"
+                                )
+                                element.replace_with(
+                                    BeautifulSoup(
+                                        f'<tbody id="stanRachunku:j_idt171_data">{value}</tbody>',
+                                        features="html.parser",
+                                    )
+                                )
                         elif key == "j_id1:javax.faces.ViewState:0":
                             self.view_state = value
                         else:
-                            raise RuntimeError(f"Unexpected update field {key!r} {value!r}")
+                            raise RuntimeError(
+                                f"Unexpected update field {key!r} {value!r}"
+                            )
                 else:
                     raise RuntimeError(f"Unexpected event {event!r} in portfolio list")
             first += 20
