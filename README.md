@@ -48,10 +48,15 @@ If you want to automatically purchase ROD bonds at 10th of each month...
     export OBLIGACJESKARBOWE_NTFY_TOPIC="YOURTOPIC"
     ```
 
+    Now, set up Apple Shortcuts automation that will react upon an incoming SMS message that contains `Logowanie do Serwisu obligacyjnego - kod SMS:` that perform a HTTP request to `https://ntfy.sh/YOURTOPIC` posting a file, with content set to automation input. This should take the content of incoming message from `PKO BP BM` with 2FA message and post it to given ntfy.sh topic. This is a way to perform automated 2FA authentication.
+
+    _I'm not an Android user and I'm not aware of a way to do this automatically on that platform._
+
 3. Set up an automated bank transfer earlier than intended automatic purchase date (i.e. 1st of Month).
 4. Set up another cron job that will run 10th each month that will purchase bonds from a specified series:
 
    ```sh
+   uv run -m obligacjeskarbowe login
    uv run -m obligacjeskarbowe buy --symbol ROS --amount 16
    ```
 
