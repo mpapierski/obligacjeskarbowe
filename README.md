@@ -28,10 +28,13 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  bonds            List all currently available bonds.
-  buy              Performs automatic purchase of a most recent bond i.e.
-  portfolio
-  require-balance  Checks a balance to be exactly the expected amount.
+  bonds           List all currently available bonds.
+  buy             Performs automatic purchase of a most recent bond i.e.
+  history         History of dispositions on your account.
+  login           Login to Obligacje Skarbowe.
+  logout          Logout from Obligacje Skarbowe.
+  portfolio       List all bonds in your portfolio.
+  verify-800plus  Verifies if you can buy 800+ bonds.
 ```
 
 # How to setup automated purchase
@@ -39,21 +42,19 @@ Commands:
 If you want to automatically purchase ROD bonds at 10th of each month...
 
 1. Set up `OBLIGACJESKARBOWE_USERNAME` and `OBLIGACJESKARBOWE_PASSWORD` env vars.
-2. Set up an automated bank transfer earlier than intended automatic purchase date (i.e. 1st of Month). (`$AMOUNT`)
-3. Set up a cron job that will run around 5th to ensure that a balance is available in your account.
+2. Set up a topic on https://ntfy.sh with a randomized name. Keep in mind, that the 2FA messages will be delivered here unencrypted so keep this private.
 
-   ```sh
-   python obligacjeskarbowe require-balance --amount $AMOUNT
-   ```
+    ```sh
+    export OBLIGACJESKARBOWE_NTFY_TOPIC="YOURTOPIC"
+    ```
 
-   This will fail if you don't have at least `$AMOUNT` PLN available on your balance sheet. This should serve as a safety: if the bank transfer didn't arrive yet, you still have time to do the transfer.
-
+3. Set up an automated bank transfer earlier than intended automatic purchase date (i.e. 1st of Month).
 4. Set up another cron job that will run 10th each month that will purchase bonds from a specified series:
 
    ```sh
-   python obligacjeskarbowe buy --symbol ROS --amount 10
+   uv run -m obligacjeskarbowe buy --symbol ROS --amount 16
    ```
 
-   This will select first bond from available list of bonds "ROS" and purchase 10 of them. There are some validation checks to ensure a correct bond will be purchased.
+   This will select first bond from available list of bonds "ROS" and purchase 16 of them. There are some validation checks to ensure a correct bond will be purchased i.e. sufficient balance etc.
 
 You can tweak the dates above so you don't send the money too early, or too late. It depends on your bank's capabilities and your willingness to give away your cash too early.

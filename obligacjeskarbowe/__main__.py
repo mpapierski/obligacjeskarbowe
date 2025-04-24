@@ -143,6 +143,7 @@ def cli():
     "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
 )
 def login(username, password, ntfy_topic):
+    """Login to Obligacje Skarbowe."""
     client = ObligacjeSkarbowe()
     try:
         client.restore_session()
@@ -160,6 +161,7 @@ def login(username, password, ntfy_topic):
 
 @cli.command()
 def logout():
+    """Logout from Obligacje Skarbowe."""
     client = ObligacjeSkarbowe()
     client.logout()
     client.clear_session()
@@ -169,6 +171,7 @@ def logout():
 @cli.command()
 @click.option("--expand", is_flag=True, default=True)
 def portfolio(expand):
+    """List all bonds in your portfolio."""
     client = ObligacjeSkarbowe()
     client.restore_session()
     try:
@@ -283,6 +286,10 @@ def history(from_date, to_date, format, output):
 @click.option("--dry-run", is_flag=True)
 @click.option("--config", type=click.Path(exists=True), default="800plus.toml")
 def verify_800plus(dry_run, config):
+    """Verifies if you can buy 800+ bonds.
+
+    This command will calculate the total compensation you received from the 800+ program and display the expected amount of ROS/ROD bonds you can buy. This value has to match your bank statements.
+    """
     with open(config, "rb") as f:
         config = tomllib.load(f)
 
