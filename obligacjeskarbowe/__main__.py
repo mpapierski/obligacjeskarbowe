@@ -2,7 +2,6 @@ import tomllib
 from collections import OrderedDict
 import dataclasses
 from datetime import datetime
-from decimal import Decimal
 import logging
 import sys
 import click
