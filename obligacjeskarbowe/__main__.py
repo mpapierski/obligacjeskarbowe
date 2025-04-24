@@ -144,34 +144,33 @@ def cli():
     "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
 )
 def login(username, password, ntfy_topic):
-    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
-    client.login()
+    client = ObligacjeSkarbowe()
+    try:
+        client.restore_session()
+    except Exception as e:
+        click.echo(f"Session restore failed: {e}")
+
+    login_info = client.login(username, password, topic=ntfy_topic)
+
     client.persist_session()
     click.echo("OK")
+    click.echo(f"🔒 Zalogowany użytkownik {login_info.username}")
+    click.echo(f"Ostatnie udane logowanie: {login_info.ostatnie_udane_logowanie}")
+    click.echo(f"Ostatnie nieudane logowanie: {login_info.ostatnie_nieudane_logowanie}")
 
 
 @cli.command()
-@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
-@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
-@click.option(
-    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
-)
-def logout(username, password, ntfy_topic):
-    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
+def logout():
+    client = ObligacjeSkarbowe()
     client.logout()
     client.clear_session()
     click.echo("OK")
 
 
 @cli.command()
-@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
-@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
-@click.option(
-    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
-)
 @click.option("--expand", is_flag=True, default=True)
-def portfolio(username, password, ntfy_topic, expand):
-    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
+def portfolio(expand):
+    client = ObligacjeSkarbowe()
     client.restore_session()
     try:
         bonds = client.list_portfolio()
@@ -182,36 +181,9 @@ def portfolio(username, password, ntfy_topic, expand):
 
 
 @cli.command()
-@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
-@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
-@click.option("--amount", required=True, type=Decimal)
-@click.option(
-    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
-)
-def require_balance(username, password, amount, ntfy_topic):
-    """Checks a balance to be exactly the expected amount. Exits if balance is invalid."""
-    client = ObligacjeSkarbowe(username, password, ntfy_topic)
-    client.restore_session()
-    try:
-        if client.balance.amount != amount:
-            click.echo(
-                f"Your balance is expected to be {amount:.02f} {DEFAULT_CURRENCY} but your balance is currently {client.balance.amount:02f} {client.balance.currency}.",
-                err=True,
-            )
-            sys.exit(1)
-    finally:
-        client.persist_session()
-
-
-@cli.command()
-@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
-@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
-@click.option(
-    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
-)
-def bonds(username, password, ntfy_topic):
+def bonds():
     """List all currently available bonds."""
-    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
+    client = ObligacjeSkarbowe()
     client.restore_session()
     try:
         available_bonds = client.list_bonds()
@@ -228,17 +200,22 @@ def bonds(username, password, ntfy_topic):
 
 
 @cli.command()
-@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
-@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
 @click.option("--symbol", required=True)
 @click.option("--amount", required=True, type=int)
-@click.option("--dry-run", is_flag=True)
 @click.option(
-    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
+    "--dry-run",
+    is_flag=True,
+    help="Do not perform any action, just print what would be done. Validates the purchase parameters.",
 )
-def buy(username, password, symbol, amount, dry_run, ntfy_topic):
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Force purchase, even if it is not possible. Will create an unpaid order that you have to pay for. If set to False, the purchase will be made only if there are enough funds on the account.",
+)
+def buy(symbol, amount, dry_run, force):
     """Performs automatic purchase of a most recent bond i.e. "ROD" buys current RODXY bond."""
-    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
+    client = ObligacjeSkarbowe()
     client.restore_session()
     try:
         expanded_symbol = None
@@ -265,7 +242,7 @@ def buy(username, password, symbol, amount, dry_run, ntfy_topic):
             return
 
         try:
-            client.purchase(expanded_symbol, amount)
+            client.purchase(expanded_symbol, amount, force)
         except Exception as error:
             click.echo(f"Wystąpił błąd: {error}")
             raise
@@ -275,8 +252,6 @@ def buy(username, password, symbol, amount, dry_run, ntfy_topic):
 
 
 @cli.command()
-@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
-@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
 @click.option(
     "--from-date",
     type=click.DateTime(["%Y-%m-%d"]),
@@ -285,12 +260,9 @@ def buy(username, password, symbol, amount, dry_run, ntfy_topic):
 @click.option("--to-date", type=click.DateTime(["%Y-%m-%d"]), default=datetime.now())
 @click.option("--format", type=click.Choice(["csv", "xlsx", "json"]))
 @click.option("--output", type=click.File("w"), default=sys.stdout)
-@click.option(
-    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
-)
-def history(username, password, from_date, to_date, format, output, ntfy_topic):
+def history(from_date, to_date, format, output):
     """History of dispositions on your account."""
-    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
+    client = ObligacjeSkarbowe()
     client.restore_session()
     try:
         history = client.history(from_date=from_date, to_date=to_date)
@@ -309,14 +281,9 @@ def history(username, password, from_date, to_date, format, output, ntfy_topic):
 
 
 @cli.command()
-@click.option("--username", required=True, envvar="OBLIGACJESKARBOWE_USERNAME")
-@click.option("--password", required=True, envvar="OBLIGACJESKARBOWE_PASSWORD")
-@click.option(
-    "--ntfy-topic", required=True, type=str, envvar="OBLIGACJESKARBOWE_NTFY_TOPIC"
-)
 @click.option("--dry-run", is_flag=True)
 @click.option("--config", type=click.Path(exists=True), default="800plus.toml")
-def verify_800plus(username, password, ntfy_topic, dry_run, config):
+def verify_800plus(dry_run, config):
     with open(config, "rb") as f:
         config = tomllib.load(f)
 
@@ -326,7 +293,7 @@ def verify_800plus(username, password, ntfy_topic, dry_run, config):
     if dry_run:
         return
 
-    client = ObligacjeSkarbowe(username, password, topic=ntfy_topic)
+    client = ObligacjeSkarbowe()
     client.restore_session()
     try:
         available_bonds = client.list_bonds()

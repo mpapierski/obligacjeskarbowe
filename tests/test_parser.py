@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 from obligacjeskarbowe.parser import (
     AvailableBond,
     Bond,
+    LoginInfo,
     PartialResponse,
     DaneDyspozycji,
     History,
@@ -23,6 +24,7 @@ from obligacjeskarbowe.parser import (
     html_to_string,
     parse_duration,
     parse_history,
+    parse_login_info,
     parse_szt,
     parse_tak_nie,
     parse_tooltip,
@@ -308,8 +310,8 @@ szt
 <hr class="space" />
 <hr class="append-bottom prepend-top" />
 
-<span class="formlabel-230 formlabel-base">Czy transakcja jest zgodna z Grupą docelową?</span><span
-    class="formfield-base" style="font-weight: bold; vertical-align: top;">TAK</span>
+<span class="formlabel-230 formlabel-base">Dyspozycja jest składana na instrument finansowy dla którego Klient znajduje się w grupie docelowej</span>
+                    <span class="formfield-base" style="font-weight: bold; width: 330px; vertical-align: top;">Na podstawie danych z wypełnionej ankiety PKO BP BM informuje, że zlecenie jest składane na instrument, dla którego klient znajduje się w grupie docelowej.</span>
 <br />
 
 <span class="formlabel-230 formlabel-base" style="vertical-align: top;">Koszt transakcji:</span><span
@@ -374,8 +376,8 @@ def test_extract_dane_dyspozycji():
 				<span class="formlabel-230 formlabel-base">Saldo środków pieniężnych</span><span class="formfield-base" style="font-weight: bold;">66 6666,42 PLN</span>
 				<hr class="space" />
                     <hr class="append-bottom prepend-top" />
-
-                    <span class="formlabel-230 formlabel-base">Czy transakcja jest zgodna z Grupą docelową?</span><span class="formfield-base" style="font-weight: bold; vertical-align: top;">TAK</span>
+                    <span class="formlabel-230 formlabel-base">Dyspozycja jest składana na instrument finansowy dla którego Klient znajduje się w grupie docelowej</span>
+                    <span class="formfield-base" style="font-weight: bold; width: 330px; vertical-align: top;">Na podstawie danych z wypełnionej ankiety PKO BP BM informuje, że zlecenie jest składane na instrument, dla którego klient znajduje się w grupie docelowej.</span>
                     <br />
 
                     <span class="formlabel-230 formlabel-base" style="vertical-align: top;">Koszt transakcji:</span><span class="formfield-base" style="font-weight: bold; width: 330px;">Klient nie ponosi opłat przy zakupie obligacji.<br/>                                      Wysokość opłaty za przedterminowy wykup obligacji                                      określa List emisyjny danej emisji obligacji.</span>
@@ -555,3 +557,23 @@ def test_parse_saldo_and_wartosc():
         amount=Decimal("1000000.00"), currency="PLN"
     )
     assert emisje_parse_wartosc_nominalna_800plus(bs), Decimal("69420.99")
+
+
+def test_parse_login_info():
+    bs = BeautifulSoup(
+        r"""<form id="userInfoForm" name="userInfoForm" method="post" action="/daneRachunku.html?execution=e39s1" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="userInfoForm" value="userInfoForm">
+<img src="/images/lock-closed.png" style="float:none; vertical-align: text-bottom;" title="Użytkownik zalogowany">
+					Zalogowany użytkownik:&nbsp;
+					MICHAŁ&nbsp;PAPIERSKI
+						<br>Ostatnie udane logowanie:&nbsp;2025-04-24 13:29:48
+						<br>Ostatnie nieudane logowanie:&nbsp;2025-04-23 18:44:29<input type="hidden" name="javax.faces.ViewState" id="javax.faces.ViewState" value="e39s1">
+</form>""",
+        features="html.parser",
+    )
+    login_info = parse_login_info(bs)
+    assert login_info == LoginInfo(
+        username="MICHAŁ PAPIERSKI",
+        ostatnie_udane_logowanie=datetime.datetime(2025, 4, 24, 13, 29, 48),
+        ostatnie_nieudane_logowanie=datetime.datetime(2025, 4, 23, 18, 44, 29),
+    )

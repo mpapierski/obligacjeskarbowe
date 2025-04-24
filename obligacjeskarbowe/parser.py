@@ -73,6 +73,13 @@ class Bonds:
     wartosc_nominalna_800plus: Money
 
 
+@dataclass
+class LoginInfo:
+    username: str
+    ostatnie_udane_logowanie: datetime
+    ostatnie_nieudane_logowanie: datetime
+
+
 def parse_tooltip(text):
     """This works well for ROD/RO"""
     results = []
@@ -352,7 +359,16 @@ def extract_dane_dyspozycji(bs):
         maksymalnie = None
 
     saldo_srodkow_pienieznych = parse_balance(text.pop("Saldo środków pieniężnych"))
-    zgodnosc = parse_tak_nie(text.pop("Czy transakcja jest zgodna z Grupą docelową?"))
+    zgodnosc = text.pop(
+        "Dyspozycja jest składana na instrument finansowy dla którego Klient znajduje się w grupie docelowej"
+    )
+    if (
+        zgodnosc
+        == "Na podstawie danych z wypełnionej ankiety PKO BP BM informuje, że zlecenie jest składane na instrument, dla którego klient znajduje się w grupie docelowej."
+    ):
+        zgodnosc = True
+    else:
+        zgodnosc = False
 
     return DaneDyspozycji(
         kod_emisji=text.pop("Kod emisji"),
@@ -456,3 +472,30 @@ def parse_history(bs):
             )
         ]
     return history
+
+
+def parse_login_info(bs):
+    # Select the form by id using a CSS selector
+    form = bs.select_one("form#userInfoForm")
+    if not form:
+        raise ValueError("Login form not found")
+    # Get all text from the form, replacing <br> with spaces
+    text = form.get_text(separator=" ", strip=True)
+    # Normalize non-breaking spaces to regular spaces
+    text = text.replace("\xa0", " ")
+    # Use regex to extract username and login times
+    pattern = re.compile(
+        r"Zalogowany użytkownik:\s*(.*?)\s+Ostatnie udane logowanie:\s*([\d\-]+\s+[\d:]+)\s+Ostatnie nieudane logowanie:\s*([\d\-]+\s+[\d:]+)"
+    )
+    match = pattern.search(text)
+    if not match:
+        raise ValueError("Could not parse login info")
+    username, last_success, last_unsuccess = match.groups()
+    # Parse the datetime strings
+    last_success = datetime.strptime(last_success.strip(), "%Y-%m-%d %H:%M:%S")
+    last_unsuccess = datetime.strptime(last_unsuccess.strip(), "%Y-%m-%d %H:%M:%S")
+    return LoginInfo(
+        username=username.strip(),
+        ostatnie_udane_logowanie=last_success,
+        ostatnie_nieudane_logowanie=last_unsuccess,
+    )
