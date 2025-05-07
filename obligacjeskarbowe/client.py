@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from datetime import date
+import io
 import logging
 import operator
 import os
@@ -39,14 +40,19 @@ SESSION_FILE = "obligacjeskarbowe.pickle"
 BASE_URL = "https://www.zakup.obligacjeskarbowe.pl"
 
 
+def preconfigured_session():
+    session = requests.Session()
+    session.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/118.0"
+        }
+    )
+    return session
+
+
 class ObligacjeSkarbowe:
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update(
-            {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/118.0"
-            }
-        )
+        self.session = preconfigured_session()
         self.available_bonds = []
         # A lookup table from readable bond name into the internal identifier.
         self.available_bonds_lookup = OrderedDict()
@@ -501,6 +507,182 @@ class ObligacjeSkarbowe:
         """Logs out."""
         r = self.session.get(BASE_URL + "/logout")
         r.raise_for_status()
+
+    def download_pdf_from_mf(self, bond_name):
+        r = self.session.get(
+            "https://www.finanse.mf.gov.pl/dlug-publiczny/bony-i-obligacje-hurtowe/wyszukiwarka-listow-emisyjnych"
+        )
+        r.raise_for_status()
+        params = {
+            "p_p_id": "securityissueviewportlet_WAR_mfportalsecuritiestradingportlet",
+            "p_p_lifecycle": "2",
+            "p_p_state": "normal",
+            "p_p_mode": "view",
+            "p_p_cacheability": "cacheLevelPage",
+            "p_p_col_id": "column-1",
+            "p_p_col_pos": "1",
+            "p_p_col_count": "2",
+        }
+
+        match = re.match(r"([A-Za-z]+)(\d+)$", bond_name)
+        if match:
+            prefix = match.group(1)
+            numeric_part = int(match.group(2))
+        else:
+            raise ValueError(f"bond_name {bond_name!r} does not match expected format")
+
+        data = f"GET_ISSUES\n{prefix}\n{prefix}{numeric_part:04d}\n\n"
+        print(
+            f"Getting PDF for obsolete bond {bond_name} from finanse.mf.gov.pl: {data!r}"
+        )
+        r = self.session.post(
+            "https://www.finanse.mf.gov.pl/dlug-publiczny/bony-i-obligacje-hurtowe/wyszukiwarka-listow-emisyjnych",
+            params=params,
+            headers={
+                "Content-Type": "application/json; charset=UTF-8",
+                "X-Requested-With": "XMLHttpRequest",
+                "Accept": "*/*",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Accept-Language": "en-US,en;q=0.9,pl;q=0.8",
+                "Connection": "keep-alive",
+            },
+            data=data,
+        )
+        r.raise_for_status()
+        json_data = r.json()
+        if len(json_data) == 0:
+            raise RuntimeError(
+                f"Bond letter of issuance for {bond_name} not found in finanse.mf.gov.pl"
+            )
+        if len(json_data) > 1:
+            raise RuntimeError(
+                f"Multiple bond letters of issuance for {bond_name} found in finanse.mf.gov.pl"
+            )
+
+        bond = json_data[0]
+        if len(bond["letters"]) != 1:
+            raise RuntimeError(
+                f"Multiple bond letters of issuance for {bond_name} found in finanse.mf.gov.pl"
+            )
+
+        url = bond["letters"][0]
+
+        params = {
+            "p_p_id": "securityissueviewportlet_WAR_mfportalsecuritiestradingportlet",
+            "p_p_lifecycle": "2",
+            "p_p_state": "normal",
+            "p_p_mode": "view",
+            "p_p_cacheability": "cacheLevelPage",
+            "p_p_col_id": "column-1",
+            "p_p_col_pos": "1",
+            "p_p_col_count": "2",
+            "fileName": url,  # the pdf file name is provided in the "url" variable
+            "time": str(int(time.time() * 1000)),
+        }
+        pdf_response = self.session.get(
+            "https://www.finanse.mf.gov.pl/dlug-publiczny/bony-i-obligacje-hurtowe/wyszukiwarka-listow-emisyjnych",
+            params=params,
+        )
+        pdf_response.raise_for_status()
+        print(f"Getting PDF for obsolete bond {bond_name} from finanse.mf.gov.pl")
+        return io.BytesIO(pdf_response.content)
+
+    def download_pdf(self, bond_name):
+        """Downloads a bond letter of issue by name.
+
+        :param str bond_name: Name of the bond
+        :param str path: Path to save the bond
+        """
+        session = preconfigured_session()
+        params = {"id": bond_name.lower()}
+        r = session.get(
+            "https://www.obligacjeskarbowe.pl/listy-emisyjne/", params=params
+        )
+        try:
+            r.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                print(
+                    f"Bond letter of issuance for {bond_name} not found in obligacjeskarbowe.pl"
+                )
+                return self.download_pdf_from_mf(bond_name)
+            else:
+                raise
+        soup = BeautifulSoup(r.content, "html.parser")
+        a_tag = soup.find("a", class_="files__item issue-letter__file")
+        try:
+            if a_tag:
+                pdf_url = a_tag.get("href")
+                if not pdf_url.startswith("http"):
+                    pdf_url = "https://www.obligacjeskarbowe.pl" + pdf_url
+                pdf_response = session.get(pdf_url)
+                pdf_response.raise_for_status()
+                return io.BytesIO(pdf_response.content)
+            else:
+                raise RuntimeError(
+                    f"Bond letter of issuance for {bond_name} not found in obligacjeskarbowe.pl"
+                )
+        except (RuntimeError, requests.exceptions.HTTPError) as e:
+            print(f"Error downloading PDF for {bond_name}: {e}")
+            return self.download_pdf_from_mf(bond_name)
+
+    def archive(self):
+        """List of all bonds in the archive."""
+        response = self.session.get(
+            "https://www.obligacjeskarbowe.pl/archiwum-listow-emisyjnych/"
+        )
+        response.raise_for_status()
+
+        # Bond types that are no longer searchable although they're still listed on the page source.
+        OBSOLETE_BONDS = {
+            "tz": "Obligacje 3-letnie TZ",
+            "sp": "Obligacje 5-letnie SP",
+        }
+
+        bs = BeautifulSoup(response.content, features="html.parser")
+        select_element = bs.find("select", id="id_type_bonds")
+        if not select_element:
+            raise RuntimeError('Select element with id "id_type_bonds" not found.')
+        bonds_options = OrderedDict()
+        for option in select_element.find_all("option"):
+            bonds_options[option.get("value")] = option.get_text(strip=True)
+
+        issue_select = bs.find("select", id="id_issue_bonds")
+        if not issue_select:
+            raise RuntimeError('Select element with id "id_issue_bonds" not found.')
+        issue_bonds = OrderedDict()
+        for option in issue_select.find_all("option"):
+            data_id = option.get("data-id")
+            if data_id is not None:
+                url = option.get("value")
+                text = option.get_text(strip=True)
+                if data_id not in issue_bonds:
+                    issue_bonds[data_id] = []
+                issue_bonds[data_id].append({"url": url, "name": text})
+
+        collected_data = OrderedDict()
+        for data_id, bonds in issue_bonds.items():
+            issues = []
+            for bond in bonds:
+                issues.append(
+                    {
+                        "url": bond["url"],
+                        "name": bond["name"],
+                    }
+                )
+
+            bond_name = bonds_options.get(data_id)
+            if bond_name is None:
+                bond_name = OBSOLETE_BONDS.get(data_id)
+            if bond_name is None:
+                raise RuntimeError(f"Bond name not found for {data_id!r}")
+
+            collected_data[data_id] = {
+                "name": bond_name,
+                "bonds": issues,
+            }
+
+        return collected_data
 
     def __javax_post(self, s, u, extra_javax_kwargs=None):
         """Performs a "javax" POST request.

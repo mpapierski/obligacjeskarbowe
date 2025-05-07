@@ -18,6 +18,7 @@ In case of ROS/ROD bonds you'll have to always remember each month for 18 years 
 - [ ] Log in through "Bank Pekao" credentials (this link: https://www.pekao.com.pl/obligacje-skarbowe).
 - [x] Buy OTS, ROR, DOR, TOS, COI, EDO series ("obligacje Skarbu Państwa")
 - [ ] Konto IKE-Obligacje
+- [x] Scrap bonds issuance letters and download PDFs (both obligacjeskarbowe.pl and finanse.mf.gov.pl as a backup)
 
 # How to use
 
@@ -63,3 +64,21 @@ If you want to automatically purchase ROD bonds at 10th of each month...
    This will select first bond from available list of bonds "ROS" and purchase 16 of them. There are some validation checks to ensure a correct bond will be purchased i.e. sufficient balance etc.
 
 You can tweak the dates above so you don't send the money too early, or too late. It depends on your bank's capabilities and your willingness to give away your cash too early.
+
+# Download letter of issuance PDFs
+
+## Single letter of issuance
+
+```sh
+uv run -m obligacjeskarbowe download-pdf TZ1114 --path ~/Documents
+```
+
+This will contact `obligacjeskarbowe.pl` looking for letter of issuance. If not found (i.e. bond is obsolete) this tool will contact `finanse.mf.gov.pl` as a backup.
+
+## Complete archive
+
+Download complete archive of bonds listed on `obligacjeskarbowe.pl`
+
+```sh
+uv run -m obligacjeskarbowe download-archive --path ~/Documents
+```

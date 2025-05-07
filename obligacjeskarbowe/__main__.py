@@ -1,3 +1,5 @@
+import shutil
+import os
 import tomllib
 from collections import OrderedDict
 import dataclasses
@@ -132,8 +134,10 @@ def tabulate_history(history):
 
 
 @click.group()
-def cli():
-    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+@click.option("--verbose", is_eager=True, default=False)
+def cli(verbose):
+    if verbose:
+        logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 
 @cli.command()
@@ -318,6 +322,52 @@ def verify_800plus(dry_run, config):
         )
     finally:
         client.persist_session()
+
+
+@cli.command()
+@click.argument("name")
+@click.option("--path", type=click.Path(exists=True), default=".")
+def download_pdf(name, path):
+    """Download a PDF file for a given bond name."""
+    client = ObligacjeSkarbowe()
+    filename = f"{path}/{name.upper()}.pdf"
+    if os.path.exists(filename):
+        click.echo(f"File {filename} already exists, skipping...")
+    else:
+        click.echo(f"Downloading {name} to {filename}")
+        name_tokens = name.split()
+        output = client.download_pdf(name_tokens[0])
+        with open(filename, "wb") as out:
+            shutil.copyfileobj(output, out)
+
+
+@cli.command()
+@click.option("--path", type=click.Path(exists=True), default=".")
+def download_archive(path):
+    """Download all available PDFs from the bonds archive."""
+    client = ObligacjeSkarbowe()
+
+    queue = []
+
+    for bond_type, data in client.archive().items():
+
+        click.echo(f"{bond_type}: {data["name"]}")
+        for bond in data["bonds"]:
+            click.echo(f"  {bond['name']}: {bond['url']}")
+            queue.append((bond["name"], bond["url"]))
+
+    with click.progressbar(queue, label="Downloading PDFs") as bar:
+        for name, url in bar:
+            filename = f"{path}/{name.upper()}.pdf"
+            if os.path.exists(filename):
+                click.echo(f"File {filename} already exists, skipping...")
+            else:
+                click.echo(f"Downloading {name} to {filename}")
+                bar.label = f"Downloading {name}"
+                name_tokens = name.split()
+                output = client.download_pdf(name_tokens[0])
+                with open(filename, "wb") as out:
+                    shutil.copyfileobj(output, out)
 
 
 if __name__ == "__main__":
