@@ -335,11 +335,23 @@ class ObligacjeSkarbowe:
         first = 20
         per_page = 20
 
+        # Serves as a set of already known bonds to ensure there are no errors while peforming requests.
+        bonds_already_known = set()
+
         while True:
             portfolio = extract_bonds(bs)
             if not portfolio:
                 print(f"Done because of empty page {first} {per_page}")
                 break
+
+            # Check for duplicates in the portfolio to ensure there are no errors while performing requests.
+            for bond in portfolio:
+                if bond.emisja in bonds_already_known:
+                    raise RuntimeError(
+                        f"Duplicate bond found in portfolio: {bond.emisja!r} at {first} {per_page}"
+                    )
+                bonds_already_known.add(bond.emisja)
+
             all_portfolio += portfolio
             r = self.session.post(
                 f"{BASE_URL}/stanRachunku.html?execution={self.view_state}",
