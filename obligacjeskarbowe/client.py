@@ -316,6 +316,20 @@ class ObligacjeSkarbowe:
 
         bs = BeautifulSoup(r.content, features="html.parser")
 
+        # Figure out "idt" number based on the <select> element of the form we're interested in to submit.
+        # This seems to change from time to time, so we need to extract it dynamically.
+        idt_number = None
+        select_elem = bs.find(
+            "select", id=re.compile(r"^stanRachunku:j_idt(\d+):j_id\d+$")
+        )
+        if select_elem:
+            match = re.match(r"^stanRachunku:j_idt(\d+):j_id\d+$", select_elem["id"])
+            if match:
+                idt_number = match.group(1)
+                print("Extracted idt_number:", idt_number)
+        if idt_number is None:
+            raise RuntimeError("Could not extract idt_number from select element")
+
         self.view_state = extract_javax_view_state(bs)
 
         first = 20
@@ -331,15 +345,15 @@ class ObligacjeSkarbowe:
                 f"{BASE_URL}/stanRachunku.html?execution={self.view_state}",
                 data={
                     "javax.faces.partial.ajax": "true",
-                    "javax.faces.source": "stanRachunku:j_idt171",
-                    "javax.faces.partial.execute": "stanRachunku:j_idt171",
-                    "javax.faces.partial.render": "stanRachunku:j_idt171",
-                    "stanRachunku:j_idt171": "stanRachunku:j_idt171",
-                    "stanRachunku:j_idt171_pagination": "true",
-                    "stanRachunku:j_idt171_first": f"{first}",
-                    "stanRachunku:j_idt171_rows": f"{per_page}",
-                    "stanRachunku:j_idt171_skipChildren": "true",
-                    "stanRachunku:j_idt171_encodeFeature": "true",
+                    "javax.faces.source": f"stanRachunku:j_idt{idt_number}",
+                    "javax.faces.partial.execute": f"stanRachunku:j_idt{idt_number}",
+                    "javax.faces.partial.render": f"stanRachunku:j_idt{idt_number}",
+                    f"stanRachunku:j_idt{idt_number}": f"stanRachunku:j_idt{idt_number}",
+                    f"stanRachunku:j_idt{idt_number}_pagination": "true",
+                    f"stanRachunku:j_idt{idt_number}_first": f"{first}",
+                    f"stanRachunku:j_idt{idt_number}_rows": f"{per_page}",
+                    f"stanRachunku:j_idt{idt_number}_skipChildren": "true",
+                    f"stanRachunku:j_idt{idt_number}_encodeFeature": "true",
                     "stanRachunku": "stanRachunku",
                     # "stanRachunku:j_idt171_rppDD": [
                     #    "20",
@@ -355,18 +369,18 @@ class ObligacjeSkarbowe:
             for event in events:
                 if isinstance(event, (PartialResponse,)):
                     for key, value in event.updates.items():
-                        if key == "stanRachunku:j_idt171":
+                        if key == f"stanRachunku:j_idt{idt_number}":
                             if value == " ":
                                 print(f"Done {first} {per_page}")
                                 return all_portfolio
                             else:
                                 print(f"{first} Partial update {key!r} {value!r}")
                                 element = bs.find(
-                                    "tbody", id="stanRachunku:j_idt171_data"
+                                    "tbody", id=f"stanRachunku:j_idt{idt_number}_data"
                                 )
                                 element.replace_with(
                                     BeautifulSoup(
-                                        f'<tbody id="stanRachunku:j_idt171_data">{value}</tbody>',
+                                        f'<tbody id="stanRachunku:j_idt{idt_number}_data">{value}</tbody>',
                                         features="html.parser",
                                     )
                                 )
