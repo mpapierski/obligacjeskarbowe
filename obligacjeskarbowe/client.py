@@ -495,6 +495,9 @@ class ObligacjeSkarbowe:
 
         self.purchase_step_3()
 
+        # Success?
+        print('Success')
+
     def purchase_step_3(self):
         s = "zatwierdzenie1:ok"
         u = "zatwierdzenie1"
