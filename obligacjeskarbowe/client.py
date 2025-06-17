@@ -26,6 +26,7 @@ from obligacjeskarbowe.parser import (
     extract_purchase_step_title,
     emisje_parse_wartosc_nominalna_800plus,
     emisje_parse_saldo_srodkow_pienieznych,
+    find_main_form,
     parse_history,
     parse_login_info,
     parse_xml_response,
@@ -44,7 +45,16 @@ def preconfigured_session():
     session = requests.Session()
     session.headers.update(
         {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/118.0"
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/118.0",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
+            "Priority": "u=1, i",
         }
     )
     return session
@@ -158,7 +168,12 @@ class ObligacjeSkarbowe:
             if not isinstance(open_event, (two_factor.Open,)):
                 raise RuntimeError("Expected open event but got {open_event!r}")
 
-            self.next_url = extract_form_action_by_id(bs, form_id="j_idt101")
+            login_form = find_main_form(bs)
+            login_form_id = login_form.attrs["id"]
+            login_button_id = login_form.select_one("button").attrs["id"]
+            assert login_button_id.startswith(login_form_id)
+
+            self.next_url = extract_form_action_by_id(bs)
             print(f"Next URL: {self.next_url!r}")
             self.view_state = extract_javax_view_state(bs)
             print(f"View state: {self.view_state!r}")
@@ -171,14 +186,16 @@ class ObligacjeSkarbowe:
 
             time.sleep(5)
 
+            data = {
+                f"{login_form_id}": f"{login_form_id}",
+                f"{login_form_id}:uxCode": token.kod,
+                f"{login_button_id}": "",
+                "javax.faces.ViewState": self.view_state,
+            }
+            print(data)
             r = self.session.post(
                 BASE_URL + self.next_url,
-                data={
-                    "j_idt101": "j_idt101",
-                    "j_idt101:uxCode": token.kod,
-                    "j_idt101:j_idt123": "",
-                    "javax.faces.ViewState": self.view_state,
-                },
+                data=data,
             )
             r.raise_for_status()
             bs = BeautifulSoup(r.content, features="html.parser")
@@ -190,7 +207,7 @@ class ObligacjeSkarbowe:
             if not isinstance(open_event, (two_factor.Open,)):
                 raise RuntimeError("Expected open event but got {open_event!r}")
 
-            self.next_url = extract_form_action_by_id(bs, form_id="j_idt89")
+            self.next_url = extract_form_action_by_id(bs)
             self.view_state = extract_javax_view_state(bs)
 
             s = "j_idt89:j_idt97"  # "Dostęp jednorazowy"
@@ -232,13 +249,28 @@ class ObligacjeSkarbowe:
 
     def __bonds_navigate(self, path):
         """Navigate bonds page, does not maintain internal lookup database."""
+        self.session.headers.update(
+            {
+                "Accept": "text/xml,application/xml,application/xhtml+xml,"
+                "text/html;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Referer": f"{BASE_URL}/daneRachunku.html",
+                "Upgrade-Insecure-Requests": "1",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-User": "?1",
+                "Cache-Control": "max-age=0",
+                "Connection": "keep-alive",
+            },
+        )
         r = self.session.get(f"{BASE_URL}{path}")
         r.raise_for_status()
         self.ensure_session_exists(r)
         bs = BeautifulSoup(r.content, features="html.parser")
 
         available_bonds = extract_available_bonds(bs, path)
-        self.next_url = extract_form_action_by_id(bs, form_id="dostepneEmisje")
+        self.next_url = extract_form_action_by_id(bs)
         self.view_state = extract_javax_view_state(bs)
         return (available_bonds, bs)
 
@@ -484,7 +516,7 @@ class ObligacjeSkarbowe:
                 "daneDyspozycji:liczbaZamiawianychObligacji": f"{amount}",
             },
         )
-        self.next_url = extract_form_action_by_id(bs, form_id="zatwierdzenie1")
+        self.next_url = extract_form_action_by_id(bs)
         title = extract_purchase_step_title(bs)
         log.info(f"Krok 2: {title}...")
 
@@ -499,7 +531,7 @@ class ObligacjeSkarbowe:
         bs = self.__javax_post(s=wybierz["s"], u=wybierz["u"])
 
         title = extract_purchase_step_title(bs)
-        self.next_url = extract_form_action_by_id(bs, form_id="daneDyspozycji")
+        self.next_url = extract_form_action_by_id(bs)
         title = extract_purchase_step_title(bs)
         print(f"Krok 1: {title}...")
         return extract_dane_dyspozycji(bs)
@@ -510,7 +542,7 @@ class ObligacjeSkarbowe:
         r.raise_for_status()
         self.ensure_session_exists(r)
         bs = BeautifulSoup(r.content, features="html.parser")
-        self.next_url = extract_form_action_by_id(bs, form_id="datyHistorii")
+        self.next_url = extract_form_action_by_id(bs)
         self.view_state = extract_javax_view_state(bs)
 
         s = "datyHistorii:ok"

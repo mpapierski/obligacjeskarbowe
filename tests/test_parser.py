@@ -21,6 +21,7 @@ from obligacjeskarbowe.parser import (
     extract_purchase_step_title,
     emisje_parse_saldo_srodkow_pienieznych,
     emisje_parse_wartosc_nominalna_800plus,
+    find_main_form,
     html_to_string,
     parse_duration,
     parse_history,
@@ -224,11 +225,14 @@ def test_parse_partial_update_of_view_state():
 
 def test_extract_form_action():
     bs = BeautifulSoup(
-        """<form id="daneDyspozycji" name="daneDyspozycji" method="post" action="/zakupObligacji500Plus.html?execution=e2s2" enctype="application/x-www-form-urlencoded">""",
+        """<span id="spanContent"><form id="daneDyspozycji" name="daneDyspozycji" method="post" action="/zakupObligacji500Plus.html?execution=e2s2" enctype="application/x-www-form-urlencoded"></span>""",
         features="html.parser",
     )
-    url = extract_form_action_by_id(bs, form_id="daneDyspozycji")
+    url = extract_form_action_by_id(bs)
     assert url == "/zakupObligacji500Plus.html?execution=e2s2"
+    form = find_main_form(bs)
+    assert form["id"] == "daneDyspozycji"
+    assert form["name"] == "daneDyspozycji"
 
 
 def test_extract_view_state():

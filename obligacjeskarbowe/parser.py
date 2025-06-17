@@ -287,8 +287,13 @@ def parse_xml_response(html):
         print(f"{html}")
 
 
-def extract_form_action_by_id(bs, form_id):
-    return bs.select(f'form[id="{form_id}"]')[0].attrs["action"]
+def find_main_form(bs):
+    return bs.select_one(f"span#spanContent > form")
+
+
+def extract_form_action_by_id(bs):
+    main_form = find_main_form(bs)
+    return main_form.attrs["action"]
 
 
 def extract_javax_view_state(bs):
