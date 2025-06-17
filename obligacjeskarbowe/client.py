@@ -39,6 +39,7 @@ LOGIN_BATON = "Zaloguj"
 
 SESSION_FILE = "obligacjeskarbowe.pickle"
 BASE_URL = "https://www.zakup.obligacjeskarbowe.pl"
+STAN_RACHUNKU_REGEX = re.compile(r"^stanRachunku:j_idt(\d+):j_id\d+$")
 
 
 def preconfigured_session():
@@ -351,14 +352,11 @@ class ObligacjeSkarbowe:
         # Figure out "idt" number based on the <select> element of the form we're interested in to submit.
         # This seems to change from time to time, so we need to extract it dynamically.
         idt_number = None
-        select_elem = bs.find(
-            "select", id=re.compile(r"^stanRachunku:j_idt(\d+):j_id\d+$")
-        )
+        select_elem = bs.find("select", id=STAN_RACHUNKU_REGEX)
         if select_elem:
-            match = re.match(r"^stanRachunku:j_idt(\d+):j_id\d+$", select_elem["id"])
+            match = STAN_RACHUNKU_REGEX.match(select_elem["id"])
             if match:
                 idt_number = match.group(1)
-                print("Extracted idt_number:", idt_number)
         if idt_number is None:
             raise RuntimeError("Could not extract idt_number from select element")
 
@@ -373,7 +371,6 @@ class ObligacjeSkarbowe:
         while True:
             portfolio = extract_bonds(bs)
             if not portfolio:
-                print(f"Done because of empty page {first} {per_page}")
                 break
 
             # Check for duplicates in the portfolio to ensure there are no errors while performing requests.
@@ -418,7 +415,6 @@ class ObligacjeSkarbowe:
                                 print(f"Done {first} {per_page}")
                                 return all_portfolio
                             else:
-                                print(f"{first} Partial update {key!r} {value!r}")
                                 element = bs.find(
                                     "tbody", id=f"stanRachunku:j_idt{idt_number}_data"
                                 )
@@ -496,7 +492,7 @@ class ObligacjeSkarbowe:
         self.purchase_step_3()
 
         # Success?
-        print('Success')
+        print("Success")
 
     def purchase_step_3(self):
         s = "zatwierdzenie1:ok"
@@ -776,21 +772,17 @@ class ObligacjeSkarbowe:
 
         data.update(extra_javax_kwargs)
 
-        print(f"POST data {data!r}")
-
         r = self.session.post(
             BASE_URL + self.next_url,
             data=data,
         )
         r.raise_for_status()
         self.ensure_session_exists(r)
-        print(f"Response headers {r.headers!r}")
 
         # Handle weird XML document with <redirect url=""> instead of 3xx response
         events = parse_xml_response(r.content)
 
         for event in events:
-            print(f"Partial response event {event!r}")
             if isinstance(event, (Redirect,)):
                 redirect_url = event.url
                 r = self.session.get(BASE_URL + redirect_url)
