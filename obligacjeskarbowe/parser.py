@@ -288,7 +288,7 @@ def parse_xml_response(html):
 
 
 def find_main_form(bs):
-    return bs.select_one(f"span#spanContent > form")
+    return bs.select_one("span#spanContent > form")
 
 
 def extract_form_action_by_id(bs):
