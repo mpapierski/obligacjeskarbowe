@@ -221,7 +221,7 @@ def bonds():
 
 @cli.command()
 @click.option("--symbol", required=True)
-@click.option("--amount", required=True, type=int)
+@click.option("--amount", required=True, type=click.IntRange(min=1))
 @click.option(
     "--dry-run",
     is_flag=True,
@@ -231,10 +231,15 @@ def bonds():
     "--force",
     is_flag=True,
     default=False,
-    help="Force purchase, even if it is not possible. Will create an unpaid order that you have to pay for. If set to False, the purchase will be made only if there are enough funds on the account.",
+    help="Skip keyboard confirmations for all purchase steps. Balance and purchase limits are still checked.",
 )
-def buy(symbol, amount, dry_run, force):
-    """Performs automatic purchase of a most recent bond i.e. "ROD" buys current RODXY bond."""
+@click.option(
+    "--allow-unpaid",
+    is_flag=True,
+    help="Allow an unpaid order when the account balance is insufficient. Purchase limits are still checked.",
+)
+def buy(symbol, amount, dry_run, force, allow_unpaid):
+    """Buy the most recent bond, confirming each step unless --force is used."""
     client = ObligacjeSkarbowe()
     client.restore_session()
     try:
@@ -262,7 +267,11 @@ def buy(symbol, amount, dry_run, force):
             return
 
         try:
-            client.purchase(expanded_symbol, amount, force)
+            client.purchase(
+                expanded_symbol, amount, force=force, allow_unpaid=allow_unpaid
+            )
+        except click.Abort:
+            raise
         except Exception as error:
             click.echo(f"Wystąpił błąd: {error}")
             raise

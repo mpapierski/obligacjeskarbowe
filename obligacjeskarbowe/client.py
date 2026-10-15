@@ -10,6 +10,7 @@ import tempfile
 import time
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
+import click
 import requests
 from obligacjeskarbowe import two_factor
 
@@ -452,17 +453,25 @@ class ObligacjeSkarbowe:
 
         return all_portfolio
 
-    def purchase(self, emisja, amount, force):
+    def purchase(self, emisja, amount, force=False, *, allow_unpaid=False):
         """Purchase a bond.
 
         Requires a prior call to `list_500plus` to obtain necessary information.
 
         :param str emisja: "Emisja" such as ROD1234
         :param int amount: Amount of bonds
+        :param bool force: Skip keyboard confirmations for each purchase step
+        :param bool allow_unpaid: Allow an order exceeding the account balance
         """
 
         # Step 1: "Wybierz" -> Dane dyspozycji
 
+        if not force:
+            click.confirm(
+                f"Krok 1/3: Wybrać emisję {emisja} do zakupu {amount} obligacji?",
+                default=False,
+                abort=True,
+            )
         dane_dyspozycji = self.purchase_step_1(emisja)
 
         if not dane_dyspozycji.kod_emisji.startswith(emisja):
@@ -471,8 +480,55 @@ class ObligacjeSkarbowe:
             )
 
         expected_cost = amount * dane_dyspozycji.wartosc_nominalna.amount
+        cash_maximum = max(
+            0,
+            int(
+                dane_dyspozycji.saldo_srodkow_pienieznych.amount
+                // dane_dyspozycji.wartosc_nominalna.amount
+            ),
+        )
+        available_maximum = (
+            min(cash_maximum, dane_dyspozycji.maksymalnie)
+            if dane_dyspozycji.maksymalnie is not None
+            else cash_maximum
+        )
+        details = [
+            ("Kod emisji", dane_dyspozycji.kod_emisji),
+            ("Pełna nazwa emisji", dane_dyspozycji.pelna_nazwa_emisji),
+            ("Oprocentowanie", f"{dane_dyspozycji.oprocentowanie:.02f}%"),
+            (
+                "Wartość nominalna jednej obligacji",
+                f"{dane_dyspozycji.wartosc_nominalna.amount:.02f} {dane_dyspozycji.wartosc_nominalna.currency}",
+            ),
+            ("Liczba zamawianych obligacji", f"{amount} szt."),
+            (
+                "Wartość zamawianych obligacji",
+                f"{expected_cost:.02f} {dane_dyspozycji.wartosc_nominalna.currency}",
+            ),
+            (
+                "Maksymalnie (limit serwisu)",
+                (
+                    f"{dane_dyspozycji.maksymalnie} szt."
+                    if dane_dyspozycji.maksymalnie is not None
+                    else "nie podano"
+                ),
+            ),
+            (
+                "Możliwe do zakupu z obecnego salda i w ramach limitu",
+                f"{available_maximum} szt.",
+            ),
+            (
+                "Saldo środków pieniężnych",
+                f"{dane_dyspozycji.saldo_srodkow_pienieznych.amount:.02f} {dane_dyspozycji.saldo_srodkow_pienieznych.currency}",
+            ),
+        ]
+        click.echo("\nDane zakupu:")
+        for label, value in details:
+            click.echo(f"{label}: {value}")
+        click.echo()
+
         if (
-            not force
+            not allow_unpaid
             and dane_dyspozycji.saldo_srodkow_pienieznych.amount < expected_cost
         ):
             raise RuntimeError(
@@ -480,7 +536,7 @@ class ObligacjeSkarbowe:
             )
 
         maksymalnie = dane_dyspozycji.maksymalnie
-        if maksymalnie is None:
+        if maksymalnie is None and not allow_unpaid:
             # ROS/ROD have a maximum monthly cap, but other's don't have so we need to calculate based on amounts provided.
             assert (
                 dane_dyspozycji.saldo_srodkow_pienieznych.currency
@@ -491,7 +547,7 @@ class ObligacjeSkarbowe:
                 / dane_dyspozycji.wartosc_nominalna.amount
             )
 
-        if maksymalnie < amount:
+        if maksymalnie is not None and maksymalnie < amount:
             raise RuntimeError(
                 f"Maksymalna dostępna ilość obligacji {dane_dyspozycji.kod_emisji} ({maksymalnie}) jest mniejsza niż oczekiwana ({amount})"
             )
@@ -501,10 +557,25 @@ class ObligacjeSkarbowe:
 
         # Step 2: "Dalej" -> Dane dyspozycji do zatwierdzenia
 
+        if not force:
+            click.confirm(
+                f"Krok 2/3: Przekazać do zatwierdzenia zakup {amount} obligacji "
+                f"{emisja} za {expected_cost:.02f} "
+                f"{dane_dyspozycji.wartosc_nominalna.currency}?",
+                default=False,
+                abort=True,
+            )
         self.purchase_step_2(amount)
 
         # Step 3: Zatwierdź dyspozycję
 
+        click.echo(
+            f"Krok 3/3: Nastąpi zakup {amount} obligacji {emisja} "
+            f"za {expected_cost:.02f} {dane_dyspozycji.wartosc_nominalna.currency}. "
+            "Ta operacja jest nieodwracalna."
+        )
+        if not force:
+            click.confirm("Potwierdzasz zakup?", default=False, abort=True)
         self.purchase_step_3()
 
         # Success?

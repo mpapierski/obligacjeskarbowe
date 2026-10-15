@@ -30,7 +30,7 @@ Options:
 
 Commands:
   bonds           List all currently available bonds.
-  buy             Performs automatic purchase of a most recent bond i.e.
+  buy             Buy the most recent bond, confirming each step.
   history         History of dispositions on your account.
   login           Login to Obligacje Skarbowe.
   logout          Logout from Obligacje Skarbowe.
@@ -68,6 +68,31 @@ Only the benefit cutoff changes; purchases and cash are fetched from the account
 at the time the command runs. `--dry-run` calculates benefits without accessing
 the account.
 
+# Buying bonds
+
+```sh
+uv run -m obligacjeskarbowe buy --symbol ROS --amount 16
+```
+
+The command asks for keyboard confirmation before each of the three purchase steps.
+Answer `y` to proceed; `n`, Enter, or end of input cancels the operation before that
+step. The final step shows the number of bonds, issue, total cost, and a warning
+that the purchase is irreversible.
+
+After the first confirmation, the command displays the issue code, full name,
+interest rate, nominal value per bond, order quantity and value, the purchase
+limit returned by the service, and the cash balance. It also shows how many whole
+bonds can be bought within both the current balance and the service limit.
+This summary is displayed before the second confirmation and also with `--force`.
+
+Use `--force` to complete all steps without keyboard confirmations. The final
+warning is still displayed, and balance and purchase limits are still checked.
+Use `--dry-run` to list the matching issue without starting the purchase steps.
+
+Previously, `--force` allowed orders exceeding the account balance. That behavior
+is now available separately as `--allow-unpaid`, which still requires confirmations
+unless combined with `--force`. Issuer purchase limits remain enforced.
+
 # How to setup automated purchase
 
 If you want to automatically purchase ROD bonds at 10th of each month...
@@ -88,7 +113,7 @@ If you want to automatically purchase ROD bonds at 10th of each month...
 
    ```sh
    uv run -m obligacjeskarbowe login
-   uv run -m obligacjeskarbowe buy --symbol ROS --amount 16
+   uv run -m obligacjeskarbowe buy --symbol ROS --amount 16 --force
    ```
 
    This will select first bond from available list of bonds "ROS" and purchase 16 of them. There are some validation checks to ensure a correct bond will be purchased i.e. sufficient balance etc.
