@@ -497,7 +497,7 @@ class ObligacjeSkarbowe:
                 default=False,
                 abort=True,
             )
-        dane_dyspozycji = self.purchase_step_1(emisja)
+        dane_dyspozycji = self.purchase_step_1(emisja, force=force)
 
         if not dane_dyspozycji.kod_emisji.startswith(emisja):
             raise RuntimeError(
@@ -631,7 +631,7 @@ class ObligacjeSkarbowe:
         title = extract_purchase_step_title(bs)
         log.info(f"Krok 2: {title}...")
 
-    def purchase_step_1(self, emisja):
+    def purchase_step_1(self, emisja, *, force=False):
         available_bond = self.available_bonds_lookup[emisja]
 
         # Navigate to appropriate path for a given bond since the order of page visits matters.
@@ -641,8 +641,39 @@ class ObligacjeSkarbowe:
         wybierz = available_bond.wybierz
         bs = self.__javax_post(s=wybierz["s"], u=wybierz["u"])
 
-        title = extract_purchase_step_title(bs)
+        mifid_form = bs.find("form", id="propozycjaWypelnieniaAnkietyMIFID")
+        if mifid_form is not None:
+            click.echo("Serwis proponuje wypełnienie ankiety MiFID.")
+            if not force:
+                click.confirm(
+                    "Kontynuować do danych zakupu bez wypełniania ankiety MiFID?",
+                    default=False,
+                    abort=True,
+                )
+            decline = mifid_form.find(
+                "input", attrs={"name": f"{mifid_form['id']}:nie", "type": "submit"}
+            )
+            if decline is None:
+                raise RuntimeError(
+                    "Nie znaleziono opcji kontynuowania bez ankiety MiFID"
+                )
+            data = {
+                node["name"]: node.get("value", "")
+                for node in mifid_form.find_all(
+                    "input", attrs={"type": "hidden", "name": True}
+                )
+            }
+            data[decline["name"]] = decline.get("value", "")
+            r = self.session.post(BASE_URL + mifid_form["action"], data=data)
+            self.ensure_session_exists(r)
+            bs = BeautifulSoup(r.content, features="html.parser")
+            if bs.find("form", id="propozycjaWypelnieniaAnkietyMIFID") is not None:
+                raise RuntimeError(
+                    "Serwis nie pozwolił przejść do danych zakupu bez ankiety MiFID"
+                )
+
         self.next_url = extract_form_action_by_id(bs)
+        self.view_state = extract_javax_view_state(bs)
         title = extract_purchase_step_title(bs)
         print(f"Krok 1: {title}...")
         return extract_dane_dyspozycji(bs)

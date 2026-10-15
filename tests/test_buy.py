@@ -84,7 +84,7 @@ def test_buy_cancels_before_unconfirmed_step(
     assert (
         steps.mock_calls
         == [
-            call.select("ROD1038"),
+            call.select("ROD1038", force=False),
             call.prepare(2),
         ][:completed_steps]
     )
@@ -101,7 +101,7 @@ def test_buy_confirms_each_step_or_uses_force(purchase_client, extra_args, input
 
     assert result.exit_code == 0, result.output
     assert steps.mock_calls == [
-        call.select("ROD1038"),
+        call.select("ROD1038", force=bool(extra_args)),
         call.prepare(2),
         call.commit(),
     ]
@@ -149,7 +149,7 @@ def test_purchase_details_show_whole_bonds_affordable_with_cash_and_limit(
     server_limit = f"{maximum} szt." if maximum is not None else "nie podano"
     assert f"Maksymalnie (limit serwisu): {server_limit}" in result.output
     assert f"Saldo środków pieniężnych: {balance} PLN" in result.output
-    assert steps.mock_calls == [call.select("ROD1038")]
+    assert steps.mock_calls == [call.select("ROD1038", force=False)]
 
 
 @pytest.mark.parametrize("extra_args", [[], ["--force"]])
@@ -176,7 +176,7 @@ def test_force_preserves_purchase_validation(
 
     assert result.exit_code == 1
     assert error in result.output
-    assert steps.mock_calls == [call.select("ROD1038")]
+    assert steps.mock_calls == [call.select("ROD1038", force=bool(extra_args))]
 
 
 @pytest.mark.parametrize("maximum", [10, None])
@@ -196,7 +196,7 @@ def test_allow_unpaid_is_separate_from_force(
 
     assert result.exit_code == 0, result.output
     assert steps.mock_calls == [
-        call.select("ROD1038"),
+        call.select("ROD1038", force=bool(extra_args)),
         call.prepare(2),
         call.commit(),
     ]
@@ -211,7 +211,7 @@ def test_allow_unpaid_preserves_issuer_limit(purchase_client):
 
     assert result.exit_code == 1
     assert "Maksymalna dostępna ilość" in result.output
-    assert steps.mock_calls == [call.select("ROD1038")]
+    assert steps.mock_calls == [call.select("ROD1038", force=True)]
 
 
 def test_failed_preparation_prevents_final_purchase(purchase_client):
@@ -222,7 +222,7 @@ def test_failed_preparation_prevents_final_purchase(purchase_client):
 
     assert result.exit_code == 1
     assert "Błąd przygotowania dyspozycji" in result.output
-    assert steps.mock_calls == [call.select("ROD1038"), call.prepare(2)]
+    assert steps.mock_calls == [call.select("ROD1038", force=True), call.prepare(2)]
 
 
 @pytest.mark.parametrize("extra_args", [[], ["--force"]])

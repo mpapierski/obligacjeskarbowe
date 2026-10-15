@@ -91,6 +91,12 @@ limit returned by the service, and the cash balance. It also shows how many whol
 bonds can be bought within both the current balance and the service limit.
 This summary is displayed before the second confirmation and also with `--force`.
 
+The service may first offer to complete a MiFID questionnaire. In that case,
+`buy` asks separately whether to continue to the purchase details without filling
+it in. Declining that confirmation stops the flow. `--force` continues past this
+optional offer automatically; suitability, balance, and purchase-limit checks
+still apply.
+
 Use `--force` to complete all steps without keyboard confirmations. The final
 warning is still displayed, and balance and purchase limits are still checked.
 Use `--dry-run` to list the matching issue without starting the purchase steps.
