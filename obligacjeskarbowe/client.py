@@ -116,13 +116,19 @@ class ObligacjeSkarbowe:
         """
 
         r = self.session.get(BASE_URL + "/daneRachunku.html")
+        if r.status_code in (401, 403):
+            print(
+                f"Saved session rejected (HTTP {r.status_code}), starting a new session"
+            )
+            self.session = preconfigured_session()
+            self.next_url = None
+            self.view_state = None
+            r = self.session.get(BASE_URL + "/daneRachunku.html")
         r.raise_for_status()
         o = urlparse(r.url)
         if o.path == "/daneRachunku.html":
             print("Already logged in, skipping login")
-            bs = BeautifulSoup(r.content, features="html.parser")
-            login_info = parse_login_info(bs)
-            return login_info
+            return self._verify_login()
 
         assert o.path == "/login.html", f"Unexpected path {o.path!r}"
         print("Session expired, or not logged in")
@@ -246,7 +252,17 @@ class ObligacjeSkarbowe:
                 f"Unexpected login prompt {prompt!r}. Expected 'Podaj kod jednorazowy dla operacji nr ...'"
             )
         self.session.cookies.set("obligacje_set", "none")
+        login_info = self._verify_login()
         log.info("Logged in")
+        return login_info
+
+    def _verify_login(self):
+        """Check access to the portfolio before reporting a successful login."""
+        r = self.session.get(BASE_URL + "/stanRachunku.html")
+        self.ensure_session_exists(r)
+        if urlparse(r.url).path != "/stanRachunku.html":
+            raise RuntimeError("Login incomplete: portfolio is not accessible")
+        bs = BeautifulSoup(r.content, features="html.parser")
         return parse_login_info(bs)
 
     def __bonds_navigate(self, path):
@@ -267,7 +283,6 @@ class ObligacjeSkarbowe:
             },
         )
         r = self.session.get(f"{BASE_URL}{path}")
-        r.raise_for_status()
         self.ensure_session_exists(r)
         bs = BeautifulSoup(r.content, features="html.parser")
 
@@ -312,7 +327,6 @@ class ObligacjeSkarbowe:
     def get_balance(self):
         """Return the cash balance shown on the bond purchase page."""
         r = self.session.get(f"{BASE_URL}/zakupObligacji.html")
-        r.raise_for_status()
         self.ensure_session_exists(r)
         bs = BeautifulSoup(r.content, features="html.parser")
         return emisje_parse_saldo_srodkow_pienieznych(bs)
@@ -345,7 +359,20 @@ class ObligacjeSkarbowe:
         return all_bonds
 
     def ensure_session_exists(self, response):
+        """Check HTTP errors and reject expired or unauthorized sessions."""
         o = urlparse(response.url)
+        if 400 <= response.status_code < 500:
+            if response.status_code in (401, 403):
+                self.clear_session()
+                raise RuntimeError(
+                    f"Session expired or rejected (HTTP {response.status_code}), please login again"
+                )
+            raise requests.HTTPError(
+                f"HTTP {response.status_code} for {o.path}: {response.reason or 'Client error'}",
+                response=response,
+                request=response.request,
+            )
+        response.raise_for_status()
         if o.path == "/login.html":
             self.clear_session()
             raise RuntimeError("Session expired, please login again")
@@ -353,7 +380,6 @@ class ObligacjeSkarbowe:
     def list_portfolio(self):
         all_portfolio = []
         r = self.session.get(f"{BASE_URL}/stanRachunku.html")
-        r.raise_for_status()
         self.ensure_session_exists(r)
 
         bs = BeautifulSoup(r.content, features="html.parser")
@@ -412,7 +438,6 @@ class ObligacjeSkarbowe:
                     "javax.faces.ViewState": self.view_state,
                 },
             )
-            r.raise_for_status()
             self.ensure_session_exists(r)
 
             events = parse_xml_response(r.content)
@@ -625,7 +650,6 @@ class ObligacjeSkarbowe:
     def history(self, from_date, to_date):
         """Retrieves a history of dispositions on your account."""
         r = self.session.get(BASE_URL + "/historiaDyspozycji.html")
-        r.raise_for_status()
         self.ensure_session_exists(r)
         bs = BeautifulSoup(r.content, features="html.parser")
         self.next_url = extract_form_action_by_id(bs)
@@ -863,7 +887,6 @@ class ObligacjeSkarbowe:
             BASE_URL + self.next_url,
             data=data,
         )
-        r.raise_for_status()
         self.ensure_session_exists(r)
 
         # Handle weird XML document with <redirect url=""> instead of 3xx response
@@ -873,7 +896,6 @@ class ObligacjeSkarbowe:
             if isinstance(event, (Redirect,)):
                 redirect_url = event.url
                 r = self.session.get(BASE_URL + redirect_url)
-                r.raise_for_status()
                 self.ensure_session_exists(r)
 
                 bs = BeautifulSoup(r.content, features="html.parser")

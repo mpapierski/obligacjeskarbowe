@@ -43,17 +43,25 @@ def test_status_shows_cash_available_for_purchases(status_client, balance, expec
     status_client.session.post.assert_not_called()
 
 
-def test_status_rejects_expired_session(status_client):
+@pytest.mark.parametrize(
+    "status_code,path,error",
+    [
+        (200, "/login.html", "Session expired, please login again"),
+        (401, "/zakupObligacji.html", "HTTP 401"),
+        (403, "/zakupObligacji.html", "HTTP 403"),
+    ],
+)
+def test_status_rejects_expired_session(status_client, status_code, path, error):
     response = Response()
-    response.status_code = 200
-    response.url = f"{BASE_URL}/login.html"
+    response.status_code = status_code
+    response.url = BASE_URL + path
     response._content = b"<form>Login</form>"
     status_client.session.get.return_value = response
 
     result = CliRunner().invoke(cli, ["status"])
 
     assert result.exit_code == 1
-    assert "Session expired, please login again" in str(result.exception)
+    assert error in str(result.exception)
     assert "Saldo" not in result.output
     status_client.clear_session.assert_called_once()
     status_client.persist_session.assert_called_once()

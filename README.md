@@ -45,6 +45,12 @@ Check the cash balance available for buying bonds using the saved session:
 uv run -m obligacjeskarbowe status
 ```
 
+If a saved session is rejected with HTTP 401 or 403, run `login` again. The login
+command starts a fresh session when the saved one is rejected and verifies access
+to the portfolio before reporting success. All other HTTP 4xx responses report
+the status code and request path while preserving the session. Failed purchase
+requests are not automatically retried.
+
 # Verifying the 500+/800+ balance
 
 ```sh
