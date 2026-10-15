@@ -427,7 +427,7 @@ def parse_duration(input_text):
         else:
             raise ValueError("Unable to recognize duration multiplier")
         return months * multiplier
-    elif input_text == "roczne":
+    elif input_text in ("roczne", "1-roczne"):
         return 12
     else:
         raise ValueError("Unable to parse duration")

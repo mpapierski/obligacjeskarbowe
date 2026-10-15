@@ -447,6 +447,7 @@ def test_parse_duration():
         ("3-miesięczne", 3),
         ("roczne", 12),
         ("roczne", 12),
+        ("1-roczne", 12),
         ("1-miesięczne", 1),
         ("1-letnia", 12),
         ("2-letnie", 24),
