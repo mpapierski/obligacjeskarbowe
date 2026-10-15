@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from decimal import Decimal, ROUND_CEILING
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 
 
 def diff_month(d1, d2):
@@ -30,39 +30,24 @@ def special_round_up(value):
 
 def calculate_available_bonds(total_compensation, nominal_amount):
     shares = (total_compensation - nominal_amount) / 100
-    return shares.quantize(Decimal("1"), rounding=ROUND_CEILING)
+    return max(Decimal(0), shares.quantize(Decimal("1"), rounding=ROUND_FLOOR))
 
 
-def calculate_total_compensation(config):
-    # The "Rodzina 800+" program calculates family compensation for each child in two parts:
-    #
-    # 1. Prorated First Month Payment:
-    #    - For the child's birth month, the program calculates a partial payment.
-    #    - It does so by determining the number of days remaining in the birth month (full_days)
-    #      versus the total number of days in that month (total_days).
-    #    - Depending on whether the child was born before or after COMP_CHANGE_DATE (2024-01-01),
-    #      the base rate is set to 500 PLN or 800 PLN respectively.
-    #    - The prorated amount is computed as (full_days / total_days * base rate) and then rounded up.
-    #
-    # 2. Full Month Payments:
-    #    - The program then calculates the number of full months eligible for compensation.
-    #    - The months before the change (from the start of the month after birth up to COMP_CHANGE_DATE)
-    #      use a rate of 500 PLN per month.
-    #    - The months from the COMP_CHANGE_DATE up to the current date use a rate of 800 PLN per month.
-    #
-    # For each child, the total compensation is the sum of the prorated first month payment
-    # and the full month payments computed using the respective rates.
-    #
-    # Detailed information (such as the number of 500+ and 800+ months and each component of the
-    # child's compensation) is printed to the console, and the overall total compensation is returned.
-    total_500plus_months = Decimal(0)
-    total_800plus_months = Decimal(0)
+def calculate_total_compensation(config, as_of=None):
+    """Estimate benefits through the month containing as_of, inclusive.
+
+    Assumes continuous eligibility from birth. The birth month is prorated,
+    followed by full months at 500 PLN through December 2023 and 800 PLN
+    from January 2024. This estimates entitlement, not actual payments.
+    """
     total_comp = Decimal(0)
-
-    today = datetime.now().date()
+    today = as_of if as_of is not None else datetime.now().date()
+    end_month = next_comp_month(today)
 
     for kid in config["kids"]:
         birth_date = datetime.strptime(kid["birth_date"], "%Y-%m-%d").date()
+        if birth_date > today:
+            continue
         birth_month = datetime(
             year=birth_date.year, month=birth_date.month, day=1
         ).date()
@@ -70,7 +55,7 @@ def calculate_total_compensation(config):
         full_days = Decimal(days_in_month(birth_date))
 
         # Calculate the prorated first month payment
-        if birth_date > COMP_CHANGE_DATE:
+        if birth_date >= COMP_CHANGE_DATE:
             amount = Decimal(800)
         else:
             amount = Decimal(500)
@@ -80,10 +65,12 @@ def calculate_total_compensation(config):
 
         first_comp_month = next_comp_month(birth_date)
 
-        months_500plus = diff_month(COMP_CHANGE_DATE, first_comp_month) + 1
-        total_500plus_months += months_500plus
-        months_800plus = diff_month(today, COMP_CHANGE_DATE)
-        total_800plus_months += months_800plus
+        months_500plus = max(
+            0, diff_month(min(end_month, COMP_CHANGE_DATE), first_comp_month)
+        )
+        months_800plus = max(
+            0, diff_month(end_month, max(first_comp_month, COMP_CHANGE_DATE))
+        )
         print(f'Kid {kid["name"]} 500+ months {months_500plus}')
         print(f'Kid {kid["name"]} 800+ months {months_800plus}')
         comp = months_500plus * Decimal(500) + months_800plus * Decimal(800)

@@ -36,7 +36,7 @@ Commands:
   logout          Logout from Obligacje Skarbowe.
   portfolio       List all bonds in your portfolio.
   status          Show the account balance available for bond purchases.
-  verify-800plus  Verifies if you can buy 800+ bonds.
+  verify-800plus  Compare estimated 500+/800+ entitlement with purchases and cash.
 ```
 
 Check the cash balance available for buying bonds using the saved session:
@@ -44,6 +44,29 @@ Check the cash balance available for buying bonds using the saved session:
 ```sh
 uv run -m obligacjeskarbowe status
 ```
+
+# Verifying the 500+/800+ balance
+
+```sh
+uv run -m obligacjeskarbowe verify-800plus
+uv run -m obligacjeskarbowe verify-800plus --through-month 2026-09
+```
+
+Using `800plus.toml`, this estimates benefits from birth through the selected month
+(inclusive, defaulting to the current month), assuming continuous eligibility.
+The birth month is prorated and rounded up to 0.10 PLN; full months use 500 PLN
+through December 2023 and 800 PLN from January 2024. Whole bonds are rounded down.
+
+The report compares the estimated benefits minus previous ROS/ROD purchases with
+the actual cash balance. It shows the remaining family-bond limit, the number of
+bonds affordable with the current balance, and the cash needed to buy the entire
+remaining limit. The expected balance assumes all benefits were transferred to
+the bond account. A difference alone does not establish a missed bank transfer.
+
+Use `--through-month` to exclude benefits for a month not yet paid or transferred.
+Only the benefit cutoff changes; purchases and cash are fetched from the account
+at the time the command runs. `--dry-run` calculates benefits without accessing
+the account.
 
 # How to setup automated purchase
 

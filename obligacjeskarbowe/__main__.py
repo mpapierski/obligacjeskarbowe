@@ -303,16 +303,27 @@ def history(from_date, to_date, format, output):
 @cli.command()
 @click.option("--dry-run", is_flag=True)
 @click.option("--config", type=click.Path(exists=True), default="800plus.toml")
-def verify_800plus(dry_run, config):
-    """Verifies if you can buy 800+ bonds.
-
-    This command will calculate the total compensation you received from the 800+ program and display the expected amount of ROS/ROD bonds you can buy. This value has to match your bank statements.
-    """
+@click.option(
+    "--through-month",
+    type=click.DateTime(["%Y-%m"]),
+    help="Include benefits through YYYY-MM (default: current month). Compare with today's purchases and cash balance.",
+)
+def verify_800plus(dry_run, config, through_month):
+    """Compare estimated 500+/800+ entitlement with purchases and available cash."""
     with open(config, "rb") as f:
         config = tomllib.load(f)
 
-    # This has to be equal to a bank statement. Always
-    total_compensation = calculate_total_compensation(config)
+    as_of = (
+        (through_month + relativedelta(months=1, days=-1)).date()
+        if through_month is not None
+        else datetime.now().date()
+    )
+    click.echo(f"Świadczenia uwzględnione do: {as_of:%Y-%m} (włącznie)")
+    click.echo("Wyliczenie zakłada ciągłe prawo do świadczeń od urodzenia dzieci.")
+    total_compensation = calculate_total_compensation(config, as_of=as_of)
+    click.echo(
+        f"Wyliczona wartość należnych świadczeń 500+/800+: {total_compensation:.02f} {DEFAULT_CURRENCY}"
+    )
 
     if dry_run:
         return
@@ -320,19 +331,39 @@ def verify_800plus(dry_run, config):
     client = ObligacjeSkarbowe()
     client.restore_session()
     try:
-        available_bonds = client.list_bonds()
+        available_bonds = client.list_500plus_bonds()
+        purchased = available_bonds.wartosc_nominalna_800plus
+        balance = available_bonds.saldo
+        expected_balance = total_compensation - purchased.amount
         click.echo(
-            f"Wartość dotychczas otrzymanego świadczenia rodzinnego 800+: {total_compensation}"
+            f"Wartość nominalna dotychczas zakupionych ROS/ROD: {purchased.amount:.02f} {purchased.currency}"
         )
         click.echo(
-            f"Wartość nominalna dotychczas zakupionych obligacji za środki przyznane w ramach programów wsparcia rodziny wynosi: {available_bonds.wartosc_nominalna_800plus.amount:.02f} {available_bonds.wartosc_nominalna_800plus.currency}"
+            f"Oczekiwane saldo (świadczenia minus zakupy ROS/ROD): {expected_balance:.02f} {DEFAULT_CURRENCY}"
         )
-        buy_amount = calculate_available_bonds(
-            total_compensation, available_bonds.wartosc_nominalna_800plus.amount
-        )
-        click.echo(f"Ilość obligacji gotowych do zakupu: {buy_amount}")
         click.echo(
-            f"Kwota wymagana do dokonania zakupu za cały limit: {buy_amount * 100} {DEFAULT_CURRENCY}"
+            f"Saldo rzeczywiste rachunku: {balance.amount:.02f} {balance.currency}"
+        )
+        click.echo(
+            f"Różnica (saldo rzeczywiste minus oczekiwane): {balance.amount - expected_balance:+.02f} {DEFAULT_CURRENCY}"
+        )
+
+        limit = calculate_available_bonds(total_compensation, purchased.amount)
+        cash_bonds = calculate_available_bonds(balance.amount, 0)
+        buy_amount = min(limit, cash_bonds)
+        shortfall = max(0, limit * 100 - balance.amount)
+        click.echo(
+            f"Pozostały limit ROS/ROD: {limit} szt. ({limit * 100:.02f} {DEFAULT_CURRENCY})"
+        )
+        click.echo(
+            f"Możliwe do zakupu z obecnego salda i w ramach limitu: {buy_amount} szt. ({buy_amount * 100:.02f} {DEFAULT_CURRENCY})"
+        )
+        click.echo(
+            f"Do zakupu całego limitu brakuje: {shortfall:.02f} {DEFAULT_CURRENCY}"
+        )
+        click.echo(
+            "Porównanie zakłada przekazanie całości świadczeń na rachunek obligacji; "
+            "różnica nie potwierdza pominiętego przelewu."
         )
     finally:
         client.persist_session()
