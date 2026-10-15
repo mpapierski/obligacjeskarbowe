@@ -426,6 +426,14 @@ class ObligacjeSkarbowe:
                                 )
                         elif key == "j_id1:javax.faces.ViewState:0":
                             self.view_state = value
+                        elif key == "messageBlock":
+                            message = BeautifulSoup(value, "html.parser").get_text(
+                                " ", strip=True
+                            )
+                            if message:
+                                raise RuntimeError(
+                                    f"Portfolio response contains a message: {message}"
+                                )
                         else:
                             raise RuntimeError(
                                 f"Unexpected update field {key!r} {value!r}"
