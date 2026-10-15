@@ -35,7 +35,14 @@ Commands:
   login           Login to Obligacje Skarbowe.
   logout          Logout from Obligacje Skarbowe.
   portfolio       List all bonds in your portfolio.
+  status          Show the account balance available for bond purchases.
   verify-800plus  Verifies if you can buy 800+ bonds.
+```
+
+Check the cash balance available for buying bonds using the saved session:
+
+```sh
+uv run -m obligacjeskarbowe status
 ```
 
 # How to setup automated purchase

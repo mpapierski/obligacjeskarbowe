@@ -187,6 +187,20 @@ def portfolio(expand):
 
 
 @cli.command()
+def status():
+    """Show the account balance available for bond purchases."""
+    client = ObligacjeSkarbowe()
+    client.restore_session()
+    try:
+        balance = client.get_balance()
+        click.echo(
+            f"Saldo dostępne na zakup obligacji: {balance.amount:.02f} {balance.currency}"
+        )
+    finally:
+        client.persist_session()
+
+
+@cli.command()
 def bonds():
     """List all currently available bonds."""
     client = ObligacjeSkarbowe()

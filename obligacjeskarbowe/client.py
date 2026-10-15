@@ -308,6 +308,14 @@ class ObligacjeSkarbowe:
             saldo=saldo, emisje=new_available_bonds, wartosc_nominalna_800plus=None
         )
 
+    def get_balance(self):
+        """Return the cash balance shown on the bond purchase page."""
+        r = self.session.get(f"{BASE_URL}/zakupObligacji.html")
+        r.raise_for_status()
+        self.ensure_session_exists(r)
+        bs = BeautifulSoup(r.content, features="html.parser")
+        return emisje_parse_saldo_srodkow_pienieznych(bs)
+
     def list_500plus_bonds(self):
         """Lists available bonds for 500+ program"""
         return self.__bonds_800plus()
