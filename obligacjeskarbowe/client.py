@@ -17,6 +17,7 @@ from obligacjeskarbowe import two_factor
 from obligacjeskarbowe.parser import (
     Bonds,
     PartialResponse,
+    PurchaseConfirmation,
     Redirect,
     extract_available_bonds,
     extract_bonds,
@@ -601,10 +602,30 @@ class ObligacjeSkarbowe:
         )
         if not force:
             click.confirm("Potwierdzasz zakup?", default=False, abort=True)
-        self.purchase_step_3()
+        confirmation = self.purchase_step_3()
 
-        # Success?
-        print("Success")
+        click.echo("\nPotwierdzenie złożenia dyspozycji zakupu:")
+        summary = [
+            ("Status", confirmation.status),
+            (
+                "Data i czas przyjęcia zlecenia",
+                f"{confirmation.data_przyjecia:%Y-%m-%d %H:%M:%S}",
+            ),
+            ("Kod emisji", dane_dyspozycji.kod_emisji),
+            ("Pełna nazwa emisji", dane_dyspozycji.pelna_nazwa_emisji),
+            ("Liczba obligacji", f"{amount} szt."),
+            (
+                "Wartość nominalna jednej obligacji",
+                f"{dane_dyspozycji.wartosc_nominalna.amount:.02f} {dane_dyspozycji.wartosc_nominalna.currency}",
+            ),
+            (
+                "Wartość dyspozycji",
+                f"{expected_cost:.02f} {dane_dyspozycji.wartosc_nominalna.currency}",
+            ),
+            ("Oprocentowanie", f"{dane_dyspozycji.oprocentowanie:.02f}%"),
+        ]
+        for label, value in summary:
+            click.echo(f"{label}: {value}")
 
     def purchase_step_3(self):
         s = "zatwierdzenie1:ok"
@@ -616,6 +637,7 @@ class ObligacjeSkarbowe:
         log.info(f"Krok 3: {title}...")
         data_przyjecia = extract_data_przyjecia_zlecenia(bs)
         log.info(f"Data i czas przyjęcia zlecenia: {data_przyjecia}")
+        return PurchaseConfirmation(status=title.strip(), data_przyjecia=data_przyjecia)
 
     def purchase_step_2(self, amount):
         s = "daneDyspozycji:ok"

@@ -311,6 +311,12 @@ class DaneDyspozycji:
     zgodnosc: bool  # "Czy transakcja jest zgodna z Grupą docelową?"
 
 
+@dataclass
+class PurchaseConfirmation:
+    status: str
+    data_przyjecia: datetime
+
+
 def parse_szt(text):
     if m := re.match(r"^(\d+) szt$", text):
         (szt,) = m.groups()

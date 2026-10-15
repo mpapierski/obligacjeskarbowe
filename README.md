@@ -97,6 +97,11 @@ it in. Declining that confirmation stops the flow. `--force` continues past this
 optional offer automatically; suitability, balance, and purchase-limit checks
 still apply.
 
+After the service confirms submission, `buy` prints the server's status and
+acceptance timestamp, issue code and full name, number of bonds, nominal value
+per bond, total order value, and interest rate. The confirmation describes the
+submitted order, including orders awaiting payment when `--allow-unpaid` is used.
+
 Use `--force` to complete all steps without keyboard confirmations. The final
 warning is still displayed, and balance and purchase limits are still checked.
 Use `--dry-run` to list the matching issue without starting the purchase steps.

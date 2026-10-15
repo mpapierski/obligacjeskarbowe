@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import Mock, call
 
@@ -13,6 +13,7 @@ from obligacjeskarbowe.parser import (
     Bonds,
     DaneDyspozycji,
     Money,
+    PurchaseConfirmation,
 )
 
 
@@ -55,7 +56,14 @@ def purchase_client(monkeypatch):
         zgodnosc=True,
     )
 
-    steps.commit.side_effect = lambda: click.echo("TEST: zakup zatwierdzony")
+    def commit():
+        click.echo("TEST: zakup zatwierdzony")
+        return PurchaseConfirmation(
+            status="Zakup obligacji 800+ - Dyspozycja zapisana",
+            data_przyjecia=datetime(2026, 10, 15, 23, 45, 12),
+        )
+
+    steps.commit.side_effect = commit
     client.purchase_step_1 = steps.select
     client.purchase_step_2 = steps.prepare
     client.purchase_step_3 = steps.commit
@@ -88,7 +96,7 @@ def test_buy_cancels_before_unconfirmed_step(
             call.prepare(2),
         ][:completed_steps]
     )
-    assert "Success" not in result.output
+    assert "Potwierdzenie złożenia dyspozycji zakupu:" not in result.output
 
 
 @pytest.mark.parametrize(
@@ -126,6 +134,16 @@ def test_buy_confirms_each_step_or_uses_force(purchase_client, extra_args, input
     assert result.output.index(warning) < result.output.index(
         "TEST: zakup zatwierdzony"
     )
+    assert result.output.index("TEST: zakup zatwierdzony") < result.output.index(
+        "Potwierdzenie złożenia dyspozycji zakupu:"
+    )
+    summary = result.output.split("Potwierdzenie złożenia dyspozycji zakupu:", 1)[1]
+    assert "Status: Zakup obligacji 800+ - Dyspozycja zapisana" in summary
+    assert "Data i czas przyjęcia zlecenia: 2026-10-15 23:45:12" in summary
+    assert "Kod emisji: ROD1038" in summary
+    assert "Liczba obligacji: 2 szt." in summary
+    assert "Wartość dyspozycji: 200.00 PLN" in summary
+    assert "Oprocentowanie: 5.60%" in summary
 
 
 @pytest.mark.parametrize(
@@ -223,6 +241,18 @@ def test_failed_preparation_prevents_final_purchase(purchase_client):
     assert result.exit_code == 1
     assert "Błąd przygotowania dyspozycji" in result.output
     assert steps.mock_calls == [call.select("ROD1038", force=True), call.prepare(2)]
+
+
+def test_failed_final_submission_does_not_report_confirmation(purchase_client):
+    _, steps = purchase_client
+    steps.commit.side_effect = RuntimeError("Brak potwierdzenia przyjęcia zlecenia")
+
+    result = CliRunner().invoke(cli, BUY_ARGS + ["--force"])
+
+    assert result.exit_code == 1
+    assert "Brak potwierdzenia przyjęcia zlecenia" in result.output
+    assert "Potwierdzenie złożenia dyspozycji zakupu:" not in result.output
+    steps.commit.assert_called_once()
 
 
 @pytest.mark.parametrize("extra_args", [[], ["--force"]])

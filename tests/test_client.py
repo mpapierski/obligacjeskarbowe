@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import Mock
 
@@ -6,7 +6,7 @@ import pytest
 from requests import Response
 
 from obligacjeskarbowe.client import BASE_URL, ObligacjeSkarbowe
-from obligacjeskarbowe.parser import InterestPeriod, Money
+from obligacjeskarbowe.parser import InterestPeriod, Money, PurchaseConfirmation
 
 
 TABLE_ID = "stanRachunku:j_idt197"
@@ -95,3 +95,30 @@ def test_portfolio_reports_server_message():
 
     with pytest.raises(RuntimeError, match="Błąd pobierania danych"):
         client.list_portfolio()
+
+
+def test_purchase_confirmation_uses_status_and_acceptance_time_from_server():
+    client = ObligacjeSkarbowe()
+    client.session = Mock()
+    client.next_url = "/zakupObligacji500Plus.html?execution=e2s2"
+    client.view_state = "e2s2"
+    client.session.post.return_value = response(
+        '<partial-response id="j_id1"><redirect url="/zakupObligacji500Plus.html?execution=e2s3"/></partial-response>'
+    )
+    client.session.get.return_value = response(
+        """<div id="content"><h3>Zakup obligacji 800+ - Dyspozycja zapisana</h3>
+        <input name="javax.faces.ViewState" value="e2s3">
+        <span class="formlabel-230 formlabel-base">Data i czas przyjęcia zlecenia: </span>
+        <span class="formfield-base">2026-10-15 23:45:12</span></div>"""
+    )
+
+    confirmation = client.purchase_step_3()
+
+    assert confirmation == PurchaseConfirmation(
+        status="Zakup obligacji 800+ - Dyspozycja zapisana",
+        data_przyjecia=datetime(2026, 10, 15, 23, 45, 12),
+    )
+    client.session.post.assert_called_once()
+    client.session.get.assert_called_once_with(
+        BASE_URL + "/zakupObligacji500Plus.html?execution=e2s3"
+    )
